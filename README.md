@@ -15,8 +15,8 @@ $ futhark pkg sync
 > import "lib/github.com/diku-dk/sparse/sparse"
 > module sp = csr f64
 > let A = sp.sparse 2 3 [(0,0,2),(1,2,3)]
-> let v = sp.smvm A [10,20]
-[20,60]
+> sp.smvm A [10,20,30]
+[20,90]
 ```
 
 ## See also
