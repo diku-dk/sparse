@@ -19,3 +19,4 @@ realclean:
 	rm -rf lib/github.com/diku-dk/segmented
 	rm -rf lib/github.com/diku-dk/linalg
 	rm -rf lib/github.com/diku-dk/cpprandom
+	rm -rf lib/github.com/diku-dk/sorts
