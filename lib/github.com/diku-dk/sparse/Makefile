@@ -14,4 +14,4 @@ futversion:
 
 .PHONY: test
 test:
-	$(FUTHARK) test sparse_test.fut sparse_test_msr_msc.fut
+	$(FUTHARK) test --pass-compiler-option=--Werror sparse_test.fut sparse_test_msr_msc.fut
