@@ -23,6 +23,26 @@ local module type mat = {
   val -     [n][m] : mat[n][m] -> mat[n][m] -> mat[n][m]
 }
 
+-- | Module type for regular sparse matrix operations. The abstract
+-- matrix type `mat` is *not* size-lifted. The module type is declared
+-- `local` to avoid that outside code makes direct use of the module
+-- type.
+
+local module type mat_regular = {
+  type t
+  type mat [n][m]
+
+  val zero         : (n:i64) -> (m:i64) -> mat[n][m]
+  val eye          : (n:i64) -> (m:i64) -> mat[n][m]
+  val dense [n][m] : mat[n][m] -> [n][m]t
+  val scale [n][m] : t -> mat[n][m] -> mat[n][m]
+  val sparse [nnz] : (n:i64) -> (m:i64) -> [nnz](i64,i64,t) -> mat[n][m]
+  val nnz   [n][m] : mat[n][m] -> i64
+  val coo   [n][m] : mat[n][m] -> ?[nnz].[nnz](i64,i64,t)
+  val +     [n][m] : mat[n][m] -> mat[n][m] -> mat[n][m]
+  val -     [n][m] : mat[n][m] -> mat[n][m] -> mat[n][m]
+}
+
 -- | Module type including modules for sparse compressed row matrix
 -- operations (`csr`) and sparse compressed column matrix operations
 -- (`csc`). The abstract matrix types `csr` and `csc` are size-lifted
@@ -35,25 +55,49 @@ local module type sparse = {
   type~ csr [n][m]
   type~ csc [n][m]
 
+  type msr [n][m]
+  type msc [n][m]
+
+  -- compressed sparse row
   module csr : {
     include mat with t = t
-                with mat [n][m] = csr [n][m]
+                with mat [n][m] = csr[n][m]
     val transpose [n][m] : mat[n][m] -> csc[m][n]
     val smvm      [n][m] : mat[n][m] -> [m]t -> [n]t
   }
 
+  -- compressed sparse column
   module csc : {
     include mat with t = t
-                with mat [n][m] = csc [n][m]
+                with mat [n][m] = csc[n][m]
     val transpose [n][m] : mat[n][m] -> csr[m][n]
   }
+
+  -- mono sparse row
+  module msr : {
+    include mat_regular with t = t
+                        with mat [n][m] = msr[n][m]
+    val transpose [n][m] : mat[n][m] -> msc[m][n]
+    val smvm      [n][m] : mat[n][m] -> [m]t -> [n]t
+  }
+
+  -- mono sparse column
+  module msc : {
+    include mat_regular with t = t
+                        with mat [n][m] = msc [n][m]
+    val transpose [n][m] : mat[n][m] -> msr[m][n]
+  }
+
 }
 
--- | Sparse matrix module based on a compressed sparse row (CSR)
--- representation, parameterised over a field (defined in the linalg
--- package). The resulting module includes two submodules, a `csr`
--- module and a `csc` module. Sparse matrix-vector multiplication is
--- available in the `csr` module.
+-- | Sparse matrix module with different representations, including a
+-- compressed sparse row (CSR) representation and a mono sparse row
+-- (MSR) representation. The representations are parameterised over a
+-- field (defined in the linalg package). The resulting module
+-- includes submodules for the different representations, including a
+-- `csr` module, a `csc` module, an `msr` module, and an `msc`
+-- module. Sparse matrix-vector multiplication is available in the
+-- `csr` and `msr` modules.
 
 module sparse (T : field) -- : sparse with t = T.t
 = {
@@ -166,9 +210,7 @@ module sparse (T : field) -- : sparse with t = T.t
     def sparse [nnz0] (n:i64) (m:i64) (coo:coo[nnz0]) : mat[n][m] =
       let [nnz] coo : coo[nnz] = norm_coo coo
       let _ = map (\(r,c,_) -> assert (0 <= r && r < n && 0 <= c && c < m) 0) coo
-      let vals = map (.2) coo
-      let col_idx = map (.1) coo
-      let rs = map (.0) coo
+      let (rs,col_idx,vals) = unzip3 coo
       let rows = reduce_by_index (replicate n 0) (+) 0 rs (replicate nnz 1)
       let row_off = scan (+) 0 rows
       in {row_off, col_idx, vals, dummy_n=replicate n (),
@@ -243,5 +285,111 @@ module sparse (T : field) -- : sparse with t = T.t
 
   type~ csr[n][m] = csr.mat[n][m]
   type~ csc[n][m] = csc.mat[n][m]
+
+--  def smm [n][m][k] (A:csr[n][m]) (B:csc[m][k]) : csc[n][k] =
+--    let {row_off=row_offA,col_idx=col_idxA,vals=valsA,_} = A
+--    let {row_off=col_offB,col_idx=row_idxB,vals=valsB,_} = B
+--    in {}
+
+  -- mono sparse row
+  module msr = {
+    type t = t
+    type mat[n][m] = {col_idx:[n]i64, vals: [n]t, dummy_m: [m]()}
+
+    local def zero_val = T.i64 0
+    local def one_val = T.i64 1
+
+    def zero (n:i64) (m:i64) : mat[n][m] =
+      {col_idx=replicate n 0,
+       vals=replicate n zero_val,
+       dummy_m=replicate m ()}
+
+    def eye (n:i64) (m:i64) : mat[n][m] =
+      {col_idx=iota n,
+       vals=replicate n one_val,
+       dummy_m=replicate m ()}
+
+    def dense [n][m] ({col_idx,vals,dummy_m=_}: mat[n][m]) : [n][m]t =
+      let A = tabulate_2d n m (\_ _ -> zero_val)
+      in scatter_2d A (zip (iota n) col_idx) vals
+
+    def scale [n][m] (v:t) ({col_idx,vals,dummy_m}:mat[n][m]) : mat[n][m] =
+      {col_idx, vals=map (T.* v) vals, dummy_m}
+
+    def sparse [nnz0] (n:i64) (m:i64) (coo:coo[nnz0]) : mat[n][m] =
+      let [nnz] coo : coo[nnz] = norm_coo coo
+      let _ = map (\(r,c,_) -> assert (0 <= r && r < n && 0 <= c && c < m) 0) coo
+      let () = if nnz > 1
+	       then let _ = map2 (\(r1,_,_) (r2,_,_) -> assert (r1!=r2) ()) coo (rotate 1 coo)
+		    in ()
+	       else ()
+      let (rs,cs,vs) = unzip3 coo
+      let vals = scatter (replicate n zero_val) rs vs
+      let col_idx = scatter (replicate n 0) rs cs
+      in {col_idx, vals, dummy_m=replicate m ()}
+
+    local def eq a b = !(a T.< b) && !(b T.< a)
+    def nnz [n][m] (a: mat[n][m]) : i64 =
+      map (\v -> if eq v zero_val then 0 else 1) a.vals
+      |> reduce (+) 0
+
+    def coo [n][m] ({col_idx,vals,dummy_m=_}: mat[n][m]) : ?[nnz].[nnz](i64,i64,t) =
+      zip3 (iota n) col_idx vals
+      |> filter (\(_,_,v) -> v T.< zero_val || zero_val T.< v)
+
+    def (+) [n][m] ({col_idx,vals,dummy_m}: mat[n][m])
+                   ({col_idx=col_idx',vals=vals',dummy_m=_}: mat[n][m]) : mat[n][m] =
+      let _ = map2 (\c c' -> assert (c==c') ()) col_idx col_idx'
+      in {dummy_m=dummy_m, col_idx=col_idx,
+	  vals=map2 (T.+) vals vals'}
+
+    def (-) [n][m] ({col_idx,vals,dummy_m}: mat[n][m])
+                   ({col_idx=col_idx',vals=vals',dummy_m=_}: mat[n][m]) : mat[n][m] =
+      let _ = map2 (\c c' -> assert (c==c') ()) col_idx col_idx'
+      in {dummy_m=dummy_m, col_idx=col_idx,
+	  vals=map2 (T.-) vals vals'}
+
+    def transpose [n][m] (mat:mat[n][m]) : mat[n][m] =
+      mat
+
+  }
+
+  -- mono sparse column
+  module msc = {
+
+    type t = t
+
+    def zero (n:i64) (m:i64) : msr.mat[m][n] =
+      msr.zero m n
+
+    def scale [n][m] (v:t) (mat:msr.mat[n][m]) : msr.mat[n][m] =
+      msr.scale v mat
+
+    def eye (n:i64) (m:i64) : msr.mat[m][n] =
+      msr.eye m n
+
+    def nnz [n][m] (mat:msr.mat[n][m]) : i64 =
+      msr.nnz mat
+
+    def coo [n][m] (mat: msr.mat[n][m]) : ?[nnz].[nnz](i64,i64,t) =
+      msr.coo mat |> map (\(r,c,v) -> (c,r,v))
+
+    def sparse [nnz] (n:i64) (m:i64) (coo: [nnz](i64,i64,t)) : msr.mat[m][n] =
+      map (\(r,c,v) -> (c,r,v)) coo |> msr.sparse m n
+
+    def dense [n][m] (mat: msr.mat[n][m]) : [m][n]t =
+      msr.dense mat |> transpose
+
+    def (+) x y = x msr.+ y
+    def (-) x y = x msr.- y
+
+    def transpose [n][m] (mat:msr.mat[n][m]) : msr.mat[n][m] =
+      mat
+
+    type mat[n][m] = msr.mat[m][n]
+  }
+
+  type msr[n][m] = msr.mat[n][m]
+  type msc[n][m] = msc.mat[n][m]
 
 }
