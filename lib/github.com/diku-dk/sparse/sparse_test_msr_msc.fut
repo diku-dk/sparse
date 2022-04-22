@@ -4,7 +4,7 @@ import "sparse"
 module sparse = sparse { open i32 def fma a b c : i32 = a * b + c }
 
 -- *************
--- CSR Tests
+-- MSR Tests
 -- *************
 
 module msr = sparse.msr
@@ -41,19 +41,19 @@ entry test_msr_eye (n:i64) (m:i64) : *[n][m]i32 =
 entry test_msr_sparse [k] (n:i64) (m:i64) (xs:[k]i64) (ys:[k]i64) (vs: [k]msr.t) : *[n][m]i32 =
   msr.sparse n m (zip3 xs ys vs) |> msr.dense
 
---- ==
---- entry: test_csr_smvm
+-- ==
+-- entry: test_msr_smvm
 -- input { 5i64 5i64
---         [0i64,0i64,0i64,1i64,1i64,2i64,2i64,2i64,3i64,4i64,4i64]
---         [0i64,1i64,3i64,1i64,2i64,1i64,2i64,3i64,3i64,3i64,4i64]
---         [1,2,11,3,4,5,6,7,8,9,10]
---         [3,1,2,6,5]
+--         [0i64,1i64,2i64,3i64,4i64]
+--         [0i64,1i64,1i64,4i64,3i64]
+--         [1,3,8,6,9]
+--         [3,10,2,6,5]
 -- }
--- output { [71,11,59,48,104] }
+-- output { [3,30,80,30,54] }
 
---entry test_csr_smvm [k] (n:i64) (m:i64) (xs:[k]i64) (ys:[k]i64) (vs: [k]csr.t) (v:*[m]csr.t) : *[n]csr.t =
---  let m = csr.sparse n m (zip3 xs ys vs)
---  in csr.smvm m v
+entry test_msr_smvm [k] (n:i64) (m:i64) (xs:[k]i64) (ys:[k]i64) (vs: [k]msr.t) (v:*[m]msr.t) : *[n]msr.t =
+  let m = msr.sparse n m (zip3 xs ys vs)
+  in msr.smvm m v
 
 -- ==
 -- entry: test_msr_nnz
@@ -76,7 +76,7 @@ entry test_msr_coo [k] (n:i64) (m:i64) (xs:[k]i64) (ys:[k]i64) (vs: [k]msr.t)
 
 
 -- *************
--- CSC Tests
+-- MSC Tests
 -- *************
 
 module msc = sparse.msc

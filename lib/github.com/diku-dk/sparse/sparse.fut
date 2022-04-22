@@ -352,6 +352,9 @@ module sparse (T : field) -- : sparse with t = T.t
     def transpose [n][m] (mat:mat[n][m]) : mat[n][m] =
       mat
 
+    def smvm [n][m] ({col_idx,vals,dummy_m}:mat[n][m]) (v:[m]t) : [n]t =
+      map2 (\c w -> w T.* v[c]) col_idx vals
+
   }
 
   -- mono sparse column
