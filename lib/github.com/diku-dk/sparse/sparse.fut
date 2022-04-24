@@ -29,8 +29,7 @@ local module type mat = {
   -- | Create a sparse matrix from a coordinate array.
   val sparse [nnz] : (n:i64) -> (m:i64) -> [nnz](i64,i64,t) -> mat[n][m]
   -- | Number of non-zero elements. Given a sparse matrix, the
-  -- function returns an upper approximation of the number of non-zero
-  -- elements.
+  -- function returns the number of non-zero elements.
   val nnz   [n][m] : mat[n][m] -> i64
   -- | Convert to coordinate vectors. Given a sparse matrix, convert
   -- it to coordinate vectors.
@@ -155,6 +154,9 @@ module sparse (T : field) --: sparse with t = T.t
   -- sorting and merging of coo values
   local type~ coo [nnz] = [nnz](i64,i64,t)
 
+  local def zero_val = T.i64 0
+  local def one_val = T.i64 1
+
   local def sort_coo [nnz] (coo: coo[nnz]) : coo[nnz] =
     merge_sort (\(r1,c1,_) (r2,c2,_) -> r1 < r2 || (r1 == r2 && c1 <= c2))
                coo
@@ -164,10 +166,12 @@ module sparse (T : field) --: sparse with t = T.t
                      coo
                      (rotate (-1) coo)
     in segmented_reduce (\(r1,c1,v1) (_,_,v2) -> (r1,c1,v1 T.+ v2))
-                        (0,0,T.i64 0) flags coo
+                        (0,0,zero_val) flags coo
 
   local def norm_coo [nnz] (coo: coo[nnz]) : coo[] =
     sort_coo coo |> merge_coo
+
+  local def eq a b = !(a T.< b) && !(b T.< a)
 
   module csr = {
 
@@ -187,13 +191,12 @@ module sparse (T : field) --: sparse with t = T.t
 
     def eye (n:i64) (m:i64) : mat[n][m] =
       let e = i64.min n m
-      let one = T.i64 1
       let row_off =
 	(map (+1) (iota e) ++ replicate (i64.max 0 (n-e)) e) :> [n]i64
       in {dummy_m = replicate m (),
 	  row_off=row_off,
 	  col_idx=iota e,
-	  vals=replicate e one
+	  vals=replicate e one_val
 	  }
 
     def dense [n][m] (csr: mat[n][m]) : [n][m]t =
@@ -222,22 +225,12 @@ module sparse (T : field) --: sparse with t = T.t
       let get r i = (T.*) (vals[r.1+i]) (v[col_idx[r.1+i]])
       in (expand_outer_reduce sz get (T.+) (T.i64 0) rows) :> [n]t
 
-    -- -- below we assume `row_off` is sorted; we could check that this
-    -- -- invariant holds for the input data...
-    -- local def csr [nnz] (n:i64) (m:i64) {row_off:[n]i64, col_idx:[nnz]i64,
-    -- 				   vals:[nnz]t} : mat[n][m] =
-    --   {dummy_m=replicate m (),
-    --    row_off=row_off,
-    --    col_idx=col_idx,
-    --    vals=vals}
-
     def scale [n][m] (v:t) (csr:mat[n][m]) : mat[n][m] =
       let [nnz] {row_off: [n]i64, col_idx: [nnz]i64, vals: [nnz]t,
 		 dummy_m} = csr
       in {row_off, col_idx, dummy_m,
 	  vals = map ((T.*) v) vals}
 
-    -- | Create sparse matrix from coordinate arrays.
     def sparse [nnz0] (n:i64) (m:i64) (coo:coo[nnz0]) : mat[n][m] =
       let [nnz] coo : coo[nnz] = norm_coo coo
       let _ = map (\(r,c,_) -> assert (0 <= r && r < n && 0 <= c && c < m) 0) coo
@@ -246,16 +239,10 @@ module sparse (T : field) --: sparse with t = T.t
       let row_off = scan (+) 0 rows
       in {row_off, col_idx, vals, dummy_m=replicate m ()}
 
-    -- | Number of non-zero elements. Given a sparse matrix, the
-    -- function returns the number of non-zero elements.
     def nnz [n][m] (csr:mat[n][m]) : i64 =
-      -- memo: should we first filter out zeros in vals?
-      let [nnz] {row_off= _, col_idx= _, vals = _vals : [nnz]t,
-		 dummy_m= _} = csr
-      in nnz
+      map (\v -> if eq v zero_val then 0 else 1) csr.vals
+      |> reduce (+) 0
 
-    -- | Convert to coordinate vectors. Given a sparse matrix, convert
-    -- it to coordinate vectors.
     def coo [n][m] (csr:mat[n][m]) =
       let [nnz] {row_off: [n]i64, col_idx: [nnz]i64, vals: [nnz]t,
 		 dummy_m= _} = csr
@@ -326,9 +313,6 @@ module sparse (T : field) --: sparse with t = T.t
     type t = t
     type mat[n][m] = {col_idx:[n]i64, vals: [n]t, dummy_m: [m]()}
 
-    local def zero_val = T.i64 0
-    local def one_val = T.i64 1
-
     def zero (n:i64) (m:i64) : mat[n][m] =
       {col_idx=replicate n 0,
        vals=replicate n zero_val,
@@ -358,7 +342,6 @@ module sparse (T : field) --: sparse with t = T.t
       let col_idx = scatter (replicate n 0) rs cs
       in {col_idx, vals, dummy_m=replicate m ()}
 
-    local def eq a b = !(a T.< b) && !(b T.< a)
     def nnz [n][m] (a: mat[n][m]) : i64 =
       map (\v -> if eq v zero_val then 0 else 1) a.vals
       |> reduce (+) 0
