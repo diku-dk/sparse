@@ -114,6 +114,9 @@ local module type sparse = {
     val transpose [n][m] : mat[n][m] -> csr[m][n]
   }
 
+  -- | Sparse matrix-matrix multiplication.
+  val smm [n][m][k] : csr[n][m] -> csc[m][k] -> csr[n][k]
+
   -- mono sparse row
   module msr : {
     include mat_regular with t = t
@@ -152,26 +155,28 @@ module sparse (T : field) --: sparse with t = T.t
   type t = T.t
 
   -- sorting and merging of coo values
-  local type~ coo [nnz] = [nnz](i64,i64,t)
+  type~ coo [nnz] = [nnz](i64,i64,t)
 
-  local def zero_val = T.i64 0
-  local def one_val = T.i64 1
+  def zero_val = T.i64 0
+  def one_val = T.i64 1
+  def eq a b = !(a T.< b) && !(b T.< a)
 
-  local def sort_coo [nnz] (coo: coo[nnz]) : coo[nnz] =
+  def sort_coo [nnz] (coo: coo[nnz]) : coo[nnz] =
     merge_sort (\(r1,c1,_) (r2,c2,_) -> r1 < r2 || (r1 == r2 && c1 <= c2))
                coo
 
-  local def merge_coo [nnz] (coo: coo[nnz]) : coo[] =
+  def merge_coo [nnz] (coo: coo[nnz]) : coo[] =
     let flags = map2 (\(r1,c1,_) (r2,c2,_) -> r1!=r2 || c1!=c2)
                      coo
                      (rotate (-1) coo)
+    let flags = if nnz >= 1 then flags with [0] = true
+		else flags
+
     in segmented_reduce (\(r1,c1,v1) (_,_,v2) -> (r1,c1,v1 T.+ v2))
                         (0,0,zero_val) flags coo
 
-  local def norm_coo [nnz] (coo: coo[nnz]) : coo[] =
+  def norm_coo [nnz] (coo: coo[nnz]) : coo[] =
     sort_coo coo |> merge_coo
-
-  local def eq a b = !(a T.< b) && !(b T.< a)
 
   module csr = {
 
@@ -303,10 +308,106 @@ module sparse (T : field) --: sparse with t = T.t
   type~ csr[n][m] = csr.mat[n][m]
   type~ csc[n][m] = csc.mat[n][m]
 
---  def smm [n][m][k] (A:csr[n][m]) (B:csc[m][k]) : csc[n][k] =
---    let {row_off=row_offA,col_idx=col_idxA,vals=valsA,_} = A
---    let {row_off=col_offB,col_idx=row_idxB,vals=valsB,_} = B
---    in {}
+  -- SMM (sparse matrix multiply) algorithm for C[n][k] := A[n][m] * B[m][k]
+  -- Assumption: A is in CSR format; B is in CSC format
+  --  1. expand each row in A into contributions to elements in C
+  --  2. expand each column in B into contributions to elements in C
+  --  3. shuffle and merge contribution from A and B (eliminate or multiply)
+  --  4. use the resulting COO representation to create a CSR or CSC representation
+
+  type contrib = {r:i64, c:i64, v:t}
+  def swap_rc ({r,c,v} : contrib) : contrib =
+    {r=c,c=r,v}
+
+  def szs [n][m] (csr:csr[n][m]) : [n]i64 =
+    map2 (\i r -> if i == 0 then r else r - csr.row_off[i-1])
+	 (iota n) csr.row_off
+
+  def get_contrib [n][m] (csr:csr[n][m]) (r:i64) (i:i64) : contrib =
+    let roff = if r == 0 then 0 else csr.row_off[r-1]
+    in { r = r,
+	 v = csr.vals[roff+i],
+	 c = csr.col_idx[roff+i] }
+
+  type option 't = #None | #Some t
+  type contr = {tr:i64, tc:i64, s:i64, v:t}
+  def cmp_contr (c:contr) (c':contr) : bool =
+    c.tr == c'.tr && c.tc == c'.tc && c.s == c'.s
+
+  def lte_contr (c:contr) (c':contr) : bool =
+    c.tr < c'.tr ||
+    (c.tr == c'.tr &&
+     (c.tc < c'.tc ||
+      (c.tc == c'.tc &&
+       (c.s < c'.s ||
+	(c.s == c'.s &&
+	 (c.v T.< c'.v || eq c.v c'.v))))))
+
+  def smm [n][m][k] (A:csr[n][m]) (B:csc[m][k]) : csr[n][k] =
+    let szsA = szs A
+    let szsB = szs B
+    let szA r = szsA[r]
+    let getA r i = get_contrib A r i
+    let szB c = szsB[c]
+    let getB c i = get_contrib B c i |> swap_rc
+
+    let contribsRows =
+      expand szA getA (iota n)
+      |> map (\{r,c,v} ->
+		map (\tc -> {tc,tr=r,s=c,v})  -- tc: target column, tr: target row
+	            (iota k))
+      |> flatten
+
+    let contribsCols =
+      expand szB getB (iota k)
+      |> map (\{r,c,v} ->
+		map (\tr -> {tc=c,tr,s=r,v})
+  		    (iota n))
+      |> flatten
+
+    let [cn] contribs : [cn]contr =
+      contribsRows ++ contribsCols |>
+      merge_sort lte_contr
+
+    -- eliminate components that have no friends
+    let dummy : contr = {tr=0,tc=0,s=0,v=zero_val}
+
+    let [cn2] contribs2 : [cn2]contr =
+      map2 (\i c ->
+	      if i == 0 && i == cn-1 then (#None : option contr)
+	      else if i == 0 then
+		   let c' = contribs[i+1]
+		   in if cmp_contr c c' then #Some c
+		      else #None
+	      else if i == cn-1 then
+		   let c' = contribs[i-1]
+		   in if cmp_contr c c' then #Some c
+		      else #None
+	      else let c' = contribs[i-1]
+		   let c'' = contribs[i+1]
+		   in if cmp_contr c c' || cmp_contr c c'' then #Some c
+		      else #None
+	   ) (iota cn) contribs
+      |> filter (\c -> match c
+		       case #None -> false
+		       case _ -> true)
+      |> map (\c -> match c
+		    case #Some x -> x
+		    case #None -> dummy)
+    let () = assert (cn2 % 2 == 0) ()
+
+    let contribs3 =
+      unflatten (cn2 / 2) 2 contribs2 |>
+      map (\cs ->
+	     let c0 = cs[0]
+	     let c1 = cs[1]
+	     in assert (cmp_contr c0 c1)
+		       (c0 with v = c0.v T.* c1.v)
+	  )
+
+    let coos = map (\c -> (c.tr,c.tc,c.v)) contribs3
+    in csr.sparse n k coos
+
 
   -- mono sparse row
   module msr = {

@@ -153,3 +153,25 @@ entry test_csr_transpose [k] (n:i64) (m:i64) (xs:[k]i64) (ys:[k]i64) (vs: [k]csr
 entry test_csc_transpose [k] (n:i64) (m:i64) (xs:[k]i64) (ys:[k]i64) (vs: [k]csc.t)
     : [][]csr.t =
   csc.sparse n m (zip3 xs ys vs) |> csc.transpose |> csr.dense
+
+-- ==
+-- entry: test_smm
+-- input { 2i64 2i64 2i64 [0i64] [1i64] [1] [1i64] [0i64] [1] }
+-- output { [[1,0],[0,0]] }
+-- input { 2i64 2i64 2i64 [1i64] [0i64] [1] [0i64] [1i64] [1] }
+-- output { [[0,0],[0,1]] }
+-- input { 2i64 3i64 4i64 [1i64] [0i64] [5] empty([0]i64) empty([0]i64) empty([0]i32) }
+-- output { [[0,0,0,0],[0,0,0,0]] }
+-- input { 2i64 2i64 2i64 [0i64,1i64] [0i64,1i64] [1,1] [0i64,1i64] [1i64,0i64] [8,9] }
+-- output { [[0,8],[9,0]] }
+-- input { 2i64 2i64 2i64 [0i64,0i64,1i64,1i64] [0i64,1i64,0i64,1i64] [1,7,2,4]
+--                        [0i64,0i64,1i64,1i64] [0i64,1i64,0i64,1i64] [3,3,5,2] }
+-- output { [[38,17],[26,14]] }
+
+entry test_smm [k1][k2] (n:i64) (m:i64) (k:i64)
+                        (xs1:[k1]i64) (ys1:[k1]i64) (vs1: [k1]csc.t)
+                        (xs2:[k2]i64) (ys2:[k2]i64) (vs2: [k2]csc.t)
+    : [][]csr.t =
+  let A = csr.sparse n m (zip3 xs1 ys1 vs1)
+  let B = csc.sparse m k (zip3 xs2 ys2 vs2)
+  in sparse.smm A B |> csr.dense
