@@ -8,7 +8,7 @@ import "../sorts/merge_sort"
 -- structure. The module type is declared `local` to avoid that
 -- outside code makes direct use of the module type.
 
-local module type mat = {
+local module type matrix = {
   -- | The scalar type.
   type t
   -- | The type of sparse matrices of dimension `n` x `m`.
@@ -45,7 +45,7 @@ local module type mat = {
 -- `local` to avoid that outside code makes direct use of the module
 -- type.
 
-local module type mat_regular = {
+local module type matrix_regular = {
   -- | The scalar type.
   type t
   -- | The type of regular-sized sparse matrices of dimension `n` x `m`.
@@ -95,8 +95,8 @@ local module type sparse = {
 
   -- compressed sparse row
   module csr : {
-    include mat with t = t
-                with mat [n][m] = csr[n][m]
+    include matrix with t = t
+                   with mat [n][m] = csr[n][m]
     -- | Matrix transposition.
     val transpose [n][m] : mat[n][m] -> csc[m][n]
     -- | Sparse matrix vector multiplication. Given a sparse `n` times
@@ -108,8 +108,8 @@ local module type sparse = {
 
   -- compressed sparse column
   module csc : {
-    include mat with t = t
-                with mat [n][m] = csc[n][m]
+    include matrix with t = t
+                   with mat [n][m] = csc[n][m]
     -- | Matrix transposition.
     val transpose [n][m] : mat[n][m] -> csr[m][n]
   }
@@ -119,8 +119,8 @@ local module type sparse = {
 
   -- mono sparse row
   module msr : {
-    include mat_regular with t = t
-                        with mat [n][m] = msr[n][m]
+    include matrix_regular with t = t
+                           with mat [n][m] = msr[n][m]
     -- | Matrix transposition.
     val transpose [n][m] : mat[n][m] -> msc[m][n]
     -- | Sparse matrix vector multiplication. Given a sparse `n` times
@@ -132,30 +132,30 @@ local module type sparse = {
 
   -- mono sparse column
   module msc : {
-    include mat_regular with t = t
-                        with mat [n][m] = msc [n][m]
+    include matrix_regular with t = t
+                           with mat [n][m] = msc [n][m]
     -- | Matrix transposition.
     val transpose [n][m] : mat[n][m] -> msr[m][n]
   }
 
 }
 
--- | Sparse matrix module with different representations, including a
+-- | Parameterised sparse matrix module with different representations, including a
 -- compressed sparse row (CSR) representation and a mono sparse row
--- (MSR) representation. The representations are parameterised over a
--- field (defined in the linalg package). The resulting module
+-- (MSR) representation. The module is parameterised over a
+-- field (defined in the linalg package). The residual module
 -- includes submodules for the different representations, including a
 -- `csr` module, a `csc` module, an `msr` module, and an `msc`
 -- module. Sparse matrix-vector multiplication is available in the
 -- `csr` and `msr` modules.
 
-module sparse (T : field) --: sparse with t = T.t
+module mk_sparse (T : field) --: sparse with t = T.t
 = {
 
   type t = T.t
 
   -- sorting and merging of coo values
-  type~ coo [nnz] = [nnz](i64,i64,t)
+  type coo [nnz] = [nnz](i64,i64,t)
 
   def zero_val = T.i64 0
   def one_val = T.i64 1
@@ -407,7 +407,6 @@ module sparse (T : field) --: sparse with t = T.t
 
     let coos = map (\c -> (c.tr,c.tc,c.v)) contribs3
     in csr.sparse n k coos
-
 
   -- mono sparse row
   module msr = {

@@ -1,7 +1,7 @@
 
 import "sparse"
 
-module sparse = sparse { open i32 def fma a b c : i32 = a * b + c }
+module sparse = mk_sparse { open i32 def fma a b c : i32 = a * b + c }
 
 -- *************
 -- MSR Tests
