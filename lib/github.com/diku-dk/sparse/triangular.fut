@@ -63,15 +63,15 @@ local module mk_triangular_mat (T : field) (R: ranking) = {
 
   type~ mat [n] =
     ?[nnz].
-     { size: [n][0](),
+     { size: [0][n](),
        data: [nnz]t
      }
 
   def idx [n] 'a (i,j) (tri: mat[n]) =
     if R.zero (i,j) then T.i64 0 else #[unsafe] tri.data[R.rank (i, j)]
 
-  def triangular [n] (arr: [n][n]t) =
-    { size = map (const []) arr,
+  def triangular [n] (arr: [n][n]t) : mat[n] =
+    { size = [],
       data = tabulate (elements n)
                       (\p -> let (i,j) = R.unrank p
                              in #[unsafe] arr[i,j])
@@ -80,9 +80,9 @@ local module mk_triangular_mat (T : field) (R: ranking) = {
   def dense [n] (tri: mat[n]) =
     tabulate_2d n n (\i j -> idx (i,j) tri)
 
-  def zero n =
-    { size = replicate n [],
-      data = replicate (elements n) (T.i64 0)
+  def zero n : mat[n] =
+    { size = [],
+      data = []
     }
 
   def eye n =
