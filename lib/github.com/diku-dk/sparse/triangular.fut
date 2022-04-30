@@ -43,7 +43,9 @@ module type triangular_mat = {
   -- | Element-wise subtraction.
   val -     [n] : mat[n] -> mat[n] -> mat[n]
   -- | Map a function across the elements of the matrix.
-  val map [n] 'a 'b : (t -> t) -> mat[n] -> mat[n]
+  val map [n] : (t -> t) -> mat[n] -> mat[n]
+  -- | Number of non-zero elements.
+  val nnz [n] : mat[n] -> i64
 }
 
 -- The number of nonzero elements for triangular `n` by `n` array.
@@ -98,8 +100,13 @@ local module mk_triangular_mat (T : field) (R: ranking) = {
 
   def x - y = x + scale (T.i64 (-1)) y
 
+  local def neq x y = x T.< y || y T.< x
+  def nnz [n] (a:mat[n]) : i64 =
+    map (neq (T.i64 0) >-> i64.bool) a.data |> reduce (i64.+) 0i64
+
   def map f (tri: mat[]) =
     tri with data = map f tri.data
+
 }
 
 -- Don't worry about the opaque formula - it's essentially just a

@@ -93,7 +93,7 @@ local module type sparse = {
   type msr [n][m]
   type msc [n][m]
 
-  -- compressed sparse row
+  -- | Compressed sparse row
   module csr : {
     include matrix with t = t
                    with mat [n][m] = csr[n][m]
@@ -106,7 +106,7 @@ local module type sparse = {
     val smvm      [n][m] : mat[n][m] -> [m]t -> [n]t
   }
 
-  -- compressed sparse column
+  -- | Compressed sparse column
   module csc : {
     include matrix with t = t
                    with mat [n][m] = csc[n][m]
@@ -117,7 +117,7 @@ local module type sparse = {
   -- | Sparse matrix-matrix multiplication.
   val smm [n][m][k] : csr[n][m] -> csc[m][k] -> csr[n][k]
 
-  -- mono sparse row
+  -- | Mono sparse row
   module msr : {
     include matrix_regular with t = t
                            with mat [n][m] = msr[n][m]
@@ -130,7 +130,7 @@ local module type sparse = {
     val smvm      [n][m] : mat[n][m] -> [m]t -> [n]t
   }
 
-  -- mono sparse column
+  -- | Mono sparse column
   module msc : {
     include matrix_regular with t = t
                            with mat [n][m] = msc [n][m]
@@ -149,8 +149,7 @@ local module type sparse = {
 -- module. Sparse matrix-vector multiplication is available in the
 -- `csr` and `msr` modules.
 
-module mk_sparse (T : field) --: sparse with t = T.t
-= {
+module mk_sparse (T : field) : sparse with t = T.t = {
 
   type t = T.t
 
