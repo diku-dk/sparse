@@ -1,3 +1,4 @@
+-- | ignore
 
 import "sparse"
 
