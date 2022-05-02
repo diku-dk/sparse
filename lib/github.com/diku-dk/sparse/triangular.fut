@@ -47,7 +47,7 @@ module type triangular_mat = {
   val map [n] : (t -> t) -> mat[n] -> mat[n]
   -- | Number of non-zero elements.
   val nnz [n] : mat[n] -> i64
-  -- | Matrix multiplication
+  -- | Matrix multiplication.
   val smm [n] : mat[n] -> mat[n] -> mat[n]
 }
 

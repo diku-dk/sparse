@@ -1,3 +1,13 @@
+-- | Sparse matrices.
+--
+-- A sparse matrix is a matrix that stores fewer elements than a
+-- corresponding dense regular matrix (non-stored elements are assumed
+-- to be zero). There are many different kinds of sparse matrices,
+-- some that are specialised to store non-zero elements only in
+-- certain areas of a matrix and some that make no assumptions about
+-- where in the matrix non-zero elements appear. This module features
+-- representations that make no assumptions about where in a matrix
+-- non-zero elements appear.
 
 import "../segmented/segmented"
 import "../linalg/linalg"
@@ -11,7 +21,7 @@ import "../sorts/merge_sort"
 local module type matrix = {
   -- | The scalar type.
   type t
-  -- | The type of sparse matrices of dimension `n` x `m`.
+  -- | The type of sparse matrices of dimension `n` times `m`.
   type~ mat [n][m]
   -- | The zero matrix. Given `n` and `m`, the function returns an `n`
   -- times `m` empty sparse matrix (zeros everywhere).
