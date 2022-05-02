@@ -10,6 +10,7 @@
 -- using the same interface, but different concrete types.
 
 import "../linalg/linalg"
+import "../segmented/segmented"
 
 -- | The module type of a triangular matrix.  This module type leaves
 -- it unstated whether it is an upper or lower triangular matrix, but
@@ -46,6 +47,8 @@ module type triangular_mat = {
   val map [n] : (t -> t) -> mat[n] -> mat[n]
   -- | Number of non-zero elements.
   val nnz [n] : mat[n] -> i64
+  -- | Matrix multiplication
+  val smm [n] : mat[n] -> mat[n] -> mat[n]
 }
 
 -- The number of nonzero elements for triangular `n` by `n` array.
@@ -67,7 +70,7 @@ local module mk_triangular_mat (T : field) (R: ranking) = {
        data: [nnz]t
      }
 
-  def idx [n] 'a (i,j) (tri: mat[n]) =
+  def idx [n] (i,j) (tri: mat[n]) =
     if R.zero (i,j) then T.i64 0 else #[unsafe] tri.data[R.rank (i, j)]
 
   def triangular [n] (arr: [n][n]t) : mat[n] =
@@ -90,6 +93,16 @@ local module mk_triangular_mat (T : field) (R: ranking) = {
 
   def scale s (tri: mat[]) =
     tri with data = map (T.*s) tri.data
+
+  def smm [n] (a:mat[n]) (b:mat[n]) : mat[n] =
+    let sz (i,j) = i - j + 1  -- lower: i >= j
+    let get (i,j) k : T.t =
+      a.data[R.rank(i,j + k)] T.*
+      b.data[R.rank(j + k,j)]
+    in a with data =
+	expand_outer_reduce
+	sz get (T.+) (T.i64 0)
+	(iota (elements n) |> (map R.unrank))
 
   def (+) [n] (x: mat[n]) (y: mat[n]) =
     -- Complicated by the fact that we cannot statically tell that the
@@ -150,17 +163,10 @@ local module mk_upper_triangular_mat (T: field) =
 module type triangular = {
   -- | Matrix element type.
   type t
-  -- | An upper triangular matrix.
-  type~ upper[n]
   -- | A lower triangular matrix.
   type~ lower[n]
-  -- | Operations on upper triangular matrices.
-  module upper : {
-    include triangular_mat with t = t with mat [n] = upper[n]
-    -- | Transpose upper triangular matrix, producing lower triangular
-    -- matrix.  O(1).
-    val transpose [n] : upper[n] -> lower[n]
-  }
+  -- | An upper triangular matrix.
+  type~ upper[n]
   -- | Operations on lower triangular matrices.
   module lower : {
     include triangular_mat with t = t with mat [n] = lower[n]
@@ -168,20 +174,28 @@ module type triangular = {
     -- triangular matrix. O(1).
     val transpose [n] : lower[n] -> upper[n]
   }
+  -- | Operations on upper triangular matrices.
+  module upper : {
+    include triangular_mat with t = t with mat [n] = upper[n]
+    -- | Transpose upper triangular matrix, producing lower triangular
+    -- matrix.  O(1).
+    val transpose [n] : upper[n] -> lower[n]
+  }
 }
 
 -- | Create a module implementing the `triangular`@mtype module type.
 -- Usage: `module m = mk_triangular f64`.
 module mk_triangular (T: field) : triangular with t = T.t = {
   type t = T.t
-  module upper = {
-    open (mk_upper_triangular_mat T)
-    def transpose [n] (m: mat[n]) = m
-  }
   module lower = {
     open (mk_lower_triangular_mat T)
     def transpose [n] (m: mat[n]) = m
   }
-  type~ upper[n] = upper.mat[n]
+  module upper = {
+    open (mk_upper_triangular_mat T)
+    def transpose [n] (m: mat[n]) = m
+    def smm a b = transpose (lower.smm (transpose b) (transpose a))
+  }
   type~ lower[n] = lower.mat[n]
+  type~ upper[n] = upper.mat[n]
 }

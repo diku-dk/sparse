@@ -92,3 +92,21 @@ module m = mk_triangular f64
 -- output { [[1.0, 0.0, 0.0], [2.0, 4.0, 0.0], [3.0, 5.0, 6.0]] }
 entry test_transpose [n] (A: [n][n]f64) =
   m.lower.dense (m.upper.transpose (m.upper.triangular A))
+
+-- ==
+-- entry: test_lower_smm
+-- input { [[1,0],[0,1]] [[1,0],[0,1]] }
+-- output { [[1,0],[0,1]] }
+-- input { [[1,0],[3,4]] [[1,0],[3,4]] }
+-- output { [[1,0],[15,16]] }
+entry test_lower_smm [n] (a:[n][n]i32) (b:[n][n]i32) : [n][n]i32 =
+  lower.smm (lower.triangular a) (lower.triangular b) |> lower.dense
+
+-- ==
+-- entry: test_upper_smm
+-- input { [[1,0],[0,1]] [[1,0],[0,1]] }
+-- output { [[1,0],[0,1]] }
+-- input { [[1,2],[0,4]] [[10,20],[0,40]] }
+-- output { [[10,100],[0,160]] }
+entry test_upper_smm [n] (a:[n][n]i32) (b:[n][n]i32) : [n][n]i32 =
+  upper.smm (upper.triangular a) (upper.triangular b) |> upper.dense
