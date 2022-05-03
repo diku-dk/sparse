@@ -63,18 +63,18 @@ local def elements_lower (n:i64) (m:i64) =
 
 -- Row in a lower-triangular array, given the value index (solution to
 -- a second-degree equation)
-def row (i:i64) =
+local def row (i:i64) =
   i64.f64 (f64.ceil ((f64.sqrt(f64.i64(9+8*i))-1)/2))-1
 
 -- lower: row major, upper: column major
-def row_lower (n:i64) (m:i64) (i:i64) =
+local def row_lower (n:i64) (m:i64) (i:i64) =
   let k = i64.min n m
   let e = elements k
   let () = assert (n >= m || i < e) ()
   in if i < e then row i
      else k + (i64.max (i - e) 0) / m
 
-def col_lower (n:i64) (m:i64) (i:i64) =
+local def col_lower (n:i64) (m:i64) (i:i64) =
   let k = i64.min n m
   let e = elements k
   let () = assert (n >= m || i < e) ()
@@ -151,7 +151,7 @@ local module mk_trapezoidal_mat (T:field) (R:ranking) = {
     tra with data = map f tra.data
 }
 
-module rank_lower = {
+local module rank_lower = {
   def rank (n,m) (i,j) =
     if m > n || i <= m then elements i + j
     else elements m + (i-m) * m + j
