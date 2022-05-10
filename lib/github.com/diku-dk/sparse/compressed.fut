@@ -1,107 +1,30 @@
--- | Sparse matrices.
+-- | Compressed sparse matrices.
 --
--- A sparse matrix is a matrix that stores fewer elements than a
--- corresponding dense regular matrix (non-stored elements are assumed
--- to be zero). There are many different kinds of sparse matrices,
--- some that are specialised to store non-zero elements only in
--- certain areas of a matrix and some that make no assumptions about
--- where in the matrix non-zero elements appear. This module features
--- representations that make no assumptions about where in a matrix
--- non-zero elements appear.
+-- A compressed sparse matrix is a matrix that stores fewer elements
+-- than a corresponding dense regular matrix (non-stored elements are
+-- assumed to be zero). There are two different kinds of compressed
+-- sparse matrices, compressed sparse row matrices, which are indexed
+-- by row, and compressed sparse column matrices that are indexed by
+-- column. Transposing a compressed sparse row matrix yields (with
+-- zero cost) a compressed sparse column matrix (and vice versa).
 
 import "../segmented/segmented"
 import "../linalg/linalg"
 import "../sorts/merge_sort"
 
--- | Module type for sparse matrix operations. The abstract matrix
--- type `mat` is size-lifted to indicate its potential irregular-sized
--- structure. The module type is declared `local` to avoid that
--- outside code makes direct use of the module type.
+import "matrix"
 
-local module type matrix = {
-  -- | The scalar type.
-  type t
-  -- | The type of sparse matrices of dimension `n` times `m`.
-  type~ mat [n][m]
-  -- | The zero matrix. Given `n` and `m`, the function returns an `n`
-  -- times `m` empty sparse matrix (zeros everywhere).
-  val zero         : (n:i64) -> (m:i64) -> mat[n][m]
-  -- | The eye. Given `n` and `m`, the function returns an `n` times
-  -- `m` sparse matrix with ones in the diagonal and zeros elsewhere.
-  val eye          : (n:i64) -> (m:i64) -> mat[n][m]
-  -- | Convert to dense format. Given a sparse matrix, the function
-  -- returns a dense representation of the matrix.
-  val dense [n][m] : mat[n][m] -> [n][m]t
-  -- | Scale elements. Given a sparse matrix and a scale value `v`,
-  -- the function returns a new sparse matrix with the elements scaled
-  -- by `v`.
-  val scale [n][m] : t -> mat[n][m] -> mat[n][m]
-  -- | Create a sparse matrix from a coordinate array.
-  val sparse [nnz] : (n:i64) -> (m:i64) -> [nnz](i64,i64,t) -> mat[n][m]
-  -- | Number of non-zero elements. Given a sparse matrix, the
-  -- function returns the number of non-zero elements.
-  val nnz   [n][m] : mat[n][m] -> i64
-  -- | Convert to coordinate vectors. Given a sparse matrix, convert
-  -- it to coordinate vectors.
-  val coo   [n][m] : mat[n][m] -> ?[nnz].[nnz](i64,i64,t)
-  -- | Element-wise addition.
-  val +     [n][m] : mat[n][m] -> mat[n][m] -> mat[n][m]
-  -- | Element-wise subtraction.
-  val -     [n][m] : mat[n][m] -> mat[n][m] -> mat[n][m]
-}
-
--- | Module type for regular sparse matrix operations. The abstract
--- matrix type `mat` is *not* size-lifted. The module type is declared
--- `local` to avoid that outside code makes direct use of the module
--- type.
-
-local module type matrix_regular = {
-  -- | The scalar type.
-  type t
-  -- | The type of regular-sized sparse matrices of dimension `n` x `m`.
-  type mat [n][m]
-  -- | The zero matrix. Given `n` and `m`, the function returns an `n`
-  -- times `m` empty sparse matrix (zeros everywhere).
-  val zero         : (n:i64) -> (m:i64) -> mat[n][m]
-  -- | The eye. Given `n` and `m`, the function returns an `n` times
-  -- `m` sparse matrix with ones in the diagonal and zeros elsewhere.
-  val eye          : (n:i64) -> (m:i64) -> mat[n][m]
-  -- | Convert to dense format. Given a sparse matrix, the function
-  -- returns a dense representation of the matrix.
-  val dense [n][m] : mat[n][m] -> [n][m]t
-  -- | Scale elements. Given a sparse matrix and a scale value `v`,
-  -- the function returns a new sparse matrix with the elements scaled
-  -- by `v`.
-  val scale [n][m] : t -> mat[n][m] -> mat[n][m]
-  -- | Create a sparse matrix from a coordinate array.
-  val sparse [nnz] : (n:i64) -> (m:i64) -> [nnz](i64,i64,t) -> mat[n][m]
-  -- | Number of non-zero elements. Given a sparse matrix, the
-  -- function returns an upper approximation of the number of non-zero
-  -- elements.
-  val nnz   [n][m] : mat[n][m] -> i64
-  -- | Convert to coordinate vectors. Given a sparse matrix, convert
-  -- it to coordinate vectors.
-  val coo   [n][m] : mat[n][m] -> ?[nnz].[nnz](i64,i64,t)
-  -- | Element-wise addition.
-  val +     [n][m] : mat[n][m] -> mat[n][m] -> mat[n][m]
-  -- | Element-wise subtraction.
-  val -     [n][m] : mat[n][m] -> mat[n][m] -> mat[n][m]
-}
-
--- | Module type including modules for sparse compressed row matrix
--- operations (`csr`) and sparse compressed column matrix operations
+-- | Module type including modules for compressed sparse row matrix
+-- operations (`csr`) and compressed sparse column matrix operations
 -- (`csc`). The abstract matrix types `csr` and `csc` are size-lifted
 -- to indicate their potential irregular structure. The module type is
 -- declared `local` to avoid that outside code makes direct use of the
 -- module type (allowing it to be extended in minor revisions).
 
-local module type sparse = {
+local module type compressed = {
   type t
   type~ csr [n][m]
   type~ csc [n][m]
-
-  type msr [n][m]
-  type msc [n][m]
 
   -- | Compressed sparse row
   module csr : {
@@ -126,40 +49,14 @@ local module type sparse = {
 
   -- | Sparse matrix-matrix multiplication.
   val smm [n][m][k] : csr[n][m] -> csc[m][k] -> csr[n][k]
-
-  -- | Mono sparse row
-  module msr : {
-    include matrix_regular with t = t
-                           with mat [n][m] = msr[n][m]
-    -- | Matrix transposition.
-    val transpose [n][m] : mat[n][m] -> msc[m][n]
-    -- | Sparse matrix vector multiplication. Given a sparse `n` times
-    -- `m` matrix and a vector of size `m`, the function returns a
-    -- vector of size `n`, the result of multiplying the argument
-    -- matrix with the argument vector.
-    val smvm      [n][m] : mat[n][m] -> [m]t -> [n]t
-  }
-
-  -- | Mono sparse column
-  module msc : {
-    include matrix_regular with t = t
-                           with mat [n][m] = msc [n][m]
-    -- | Matrix transposition.
-    val transpose [n][m] : mat[n][m] -> msr[m][n]
-  }
-
 }
 
--- | Parameterised sparse matrix module with different representations, including a
--- compressed sparse row (CSR) representation and a mono sparse row
--- (MSR) representation. The module is parameterised over a
--- field (defined in the linalg package). The residual module
--- includes submodules for the different representations, including a
--- `csr` module, a `csc` module, an `msr` module, and an `msc`
--- module. Sparse matrix-vector multiplication is available in the
--- `csr` and `msr` modules.
+-- | Parameterised compressed sparse matrix module with individual
+-- submodules for compressed sparse row (CSR) and compressed sparse
+-- column (CSC) representations. The module is parameterised over a
+-- field (defined in the linalg package).
 
-module mk_sparse (T : field) : sparse with t = T.t = {
+module mk_compressed (T : field) : compressed with t = T.t = {
 
   type t = T.t
 
@@ -416,105 +313,4 @@ module mk_sparse (T : field) : sparse with t = T.t = {
 
     let coos = map (\c -> (c.tr,c.tc,c.v)) contribs3
     in csr.sparse n k coos
-
-  -- mono sparse row
-  module msr = {
-    type t = t
-    type mat[n][m] = {col_idx:[n]i64, vals: [n]t, dummy_m: [m]()}
-
-    def zero (n:i64) (m:i64) : mat[n][m] =
-      {col_idx=replicate n 0,
-       vals=replicate n zero_val,
-       dummy_m=replicate m ()}
-
-    def eye (n:i64) (m:i64) : mat[n][m] =
-      {col_idx=iota n,
-       vals=replicate n one_val,
-       dummy_m=replicate m ()}
-
-    def dense [n][m] ({col_idx,vals,dummy_m=_}: mat[n][m]) : [n][m]t =
-      let A = tabulate_2d n m (\_ _ -> zero_val)
-      in scatter_2d A (zip (iota n) col_idx) vals
-
-    def scale [n][m] (v:t) ({col_idx,vals,dummy_m}:mat[n][m]) : mat[n][m] =
-      {col_idx, vals=map (T.* v) vals, dummy_m}
-
-    def sparse [nnz0] (n:i64) (m:i64) (coo:coo[nnz0]) : mat[n][m] =
-      let [nnz] coo : coo[nnz] = norm_coo coo
-      let _ = map (\(r,c,_) -> assert (0 <= r && r < n && 0 <= c && c < m) 0) coo
-      let () = if nnz > 1
-	       then let _ = map2 (\(r1,_,_) (r2,_,_) -> assert (r1!=r2) ()) coo (rotate 1 coo)
-		    in ()
-	       else ()
-      let (rs,cs,vs) = unzip3 coo
-      let vals = scatter (replicate n zero_val) rs vs
-      let col_idx = scatter (replicate n 0) rs cs
-      in {col_idx, vals, dummy_m=replicate m ()}
-
-    def nnz [n][m] (a: mat[n][m]) : i64 =
-      map (\v -> if eq v zero_val then 0 else 1) a.vals
-      |> reduce (+) 0
-
-    def coo [n][m] ({col_idx,vals,dummy_m=_}: mat[n][m]) : ?[nnz].[nnz](i64,i64,t) =
-      zip3 (iota n) col_idx vals
-      |> filter (\(_,_,v) -> v T.< zero_val || zero_val T.< v)
-
-    def (+) [n][m] ({col_idx,vals,dummy_m}: mat[n][m])
-                   ({col_idx=col_idx',vals=vals',dummy_m=_}: mat[n][m]) : mat[n][m] =
-      let _ = map2 (\c c' -> assert (c==c') ()) col_idx col_idx'
-      in {dummy_m=dummy_m, col_idx=col_idx,
-	  vals=map2 (T.+) vals vals'}
-
-    def (-) [n][m] ({col_idx,vals,dummy_m}: mat[n][m])
-                   ({col_idx=col_idx',vals=vals',dummy_m=_}: mat[n][m]) : mat[n][m] =
-      let _ = map2 (\c c' -> assert (c==c') ()) col_idx col_idx'
-      in {dummy_m=dummy_m, col_idx=col_idx,
-	  vals=map2 (T.-) vals vals'}
-
-    def transpose [n][m] (mat:mat[n][m]) : mat[n][m] =
-      mat
-
-    def smvm [n][m] ({col_idx,vals,dummy_m=_}:mat[n][m]) (v:[m]t) : [n]t =
-      map2 (\c w -> w T.* v[c]) col_idx vals
-
-  }
-
-  -- mono sparse column
-  module msc = {
-
-    type t = t
-
-    def zero (n:i64) (m:i64) : msr.mat[m][n] =
-      msr.zero m n
-
-    def scale [n][m] (v:t) (mat:msr.mat[n][m]) : msr.mat[n][m] =
-      msr.scale v mat
-
-    def eye (n:i64) (m:i64) : msr.mat[m][n] =
-      msr.eye m n
-
-    def nnz [n][m] (mat:msr.mat[n][m]) : i64 =
-      msr.nnz mat
-
-    def coo [n][m] (mat: msr.mat[n][m]) : ?[nnz].[nnz](i64,i64,t) =
-      msr.coo mat |> map (\(r,c,v) -> (c,r,v))
-
-    def sparse [nnz] (n:i64) (m:i64) (coo: [nnz](i64,i64,t)) : msr.mat[m][n] =
-      map (\(r,c,v) -> (c,r,v)) coo |> msr.sparse m n
-
-    def dense [n][m] (mat: msr.mat[n][m]) : [m][n]t =
-      msr.dense mat |> transpose
-
-    def (+) x y = x msr.+ y
-    def (-) x y = x msr.- y
-
-    def transpose [n][m] (mat:msr.mat[n][m]) : msr.mat[n][m] =
-      mat
-
-    type mat[n][m] = msr.mat[m][n]
-  }
-
-  type msr[n][m] = msr.mat[n][m]
-  type msc[n][m] = msc.mat[n][m]
-
 }

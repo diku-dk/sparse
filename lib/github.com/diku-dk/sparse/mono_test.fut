@@ -1,14 +1,14 @@
 -- | ignore
 
-import "sparse"
+import "mono"
 
-module sparse = mk_sparse { open i32 def fma a b c : i32 = a * b + c }
+module mono = mk_mono { open i32 def fma a b c : i32 = a * b + c }
 
 -- *************
 -- MSR Tests
 -- *************
 
-module msr = sparse.msr
+module msr = mono.msr
 
 -- ==
 -- entry: test_msr_eye
@@ -80,7 +80,7 @@ entry test_msr_coo [k] (n:i64) (m:i64) (xs:[k]i64) (ys:[k]i64) (vs: [k]msr.t)
 -- MSC Tests
 -- *************
 
-module msc = sparse.msc
+module msc = mono.msc
 
 -- ==
 -- entry: test_msc_eye
