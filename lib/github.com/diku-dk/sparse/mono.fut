@@ -26,7 +26,7 @@ local module type mono = {
   type msr [n][m]
   type msc [n][m]
 
-  -- | Mono sparse row
+  -- | Mono sparse row representation.
   module msr : {
     include matrix_regular with t = t
                            with mat [n][m] = msr[n][m]
@@ -39,12 +39,14 @@ local module type mono = {
     val smvm      [n][m] : mat[n][m] -> [m]t -> [n]t
   }
 
-  -- | Mono sparse column
+  -- | Mono sparse column representation.
   module msc : {
     include matrix_regular with t = t
                            with mat [n][m] = msc [n][m]
     -- | Matrix transposition.
     val transpose [n][m] : mat[n][m] -> msr[m][n]
+    -- | Vector sparse matrix multiplication.
+    val vsmm      [n][m] : [n]t -> mat[n][m] -> [m]t
   }
 
 }
@@ -176,6 +178,9 @@ module mk_mono (T : field) : mono with t = T.t = {
 
     def transpose [n][m] (mat:msr.mat[n][m]) : msr.mat[n][m] =
       mat
+
+    def vsmm [n][m] (a:[n]t) (b:msr.mat[m][n]) : [m]t =
+      msr.smvm (transpose b) a
 
     type mat[n][m] = msr.mat[m][n]
   }

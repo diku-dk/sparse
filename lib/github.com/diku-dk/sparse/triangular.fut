@@ -15,7 +15,7 @@ import "../segmented/segmented"
 -- | The module type of a triangular matrix.  This module type leaves
 -- it unstated whether it is an upper or lower triangular matrix, but
 -- specific instantiations make it clear.
-module type triangular_mat = {
+module type triangular_matrix = {
   -- | The scalar type.
   type t
   -- | The type of `n` times `n` triangular matrices.
@@ -61,7 +61,7 @@ local module type ranking = {
   val zero : (i64,i64) -> bool
 }
 
-local module mk_triangular_mat (T : field) (R: ranking) = {
+local module mk_triangular_matrix (T : field) (R: ranking) = {
   type t = T.t
 
   type~ mat [n] =
@@ -128,8 +128,8 @@ local module mk_triangular_mat (T : field) (R: ranking) = {
 local def row (i: i64) =
   i64.f64 (f64.ceil ((f64.sqrt(f64.i64(9+8*i))-1)/2))-1
 
-local module mk_lower_triangular_mat (T: field) =
-  mk_triangular_mat T {
+local module mk_lower_triangular_matrix (T: field) =
+  mk_triangular_matrix T {
 
   def rank (i, j) =
     elements i + j
@@ -143,8 +143,8 @@ local module mk_lower_triangular_mat (T: field) =
     j > i
 }
 
-local module mk_upper_triangular_mat (T: field) =
-  mk_triangular_mat T {
+local module mk_upper_triangular_matrix (T: field) =
+  mk_triangular_matrix T {
   def rank (i, j) =
     elements j + i
 
@@ -169,14 +169,14 @@ module type triangular = {
   type~ upper[n]
   -- | Operations on lower triangular matrices.
   module lower : {
-    include triangular_mat with t = t with mat [n] = lower[n]
+    include triangular_matrix with t = t with mat [n] = lower[n]
     -- | Transpose lower triangular matrix, producing upper
     -- triangular matrix. O(1).
     val transpose [n] : lower[n] -> upper[n]
   }
   -- | Operations on upper triangular matrices.
   module upper : {
-    include triangular_mat with t = t with mat [n] = upper[n]
+    include triangular_matrix with t = t with mat [n] = upper[n]
     -- | Transpose upper triangular matrix, producing lower triangular
     -- matrix.  O(1).
     val transpose [n] : upper[n] -> lower[n]
@@ -188,11 +188,11 @@ module type triangular = {
 module mk_triangular (T: field) : triangular with t = T.t = {
   type t = T.t
   module lower = {
-    open (mk_lower_triangular_mat T)
+    open (mk_lower_triangular_matrix T)
     def transpose [n] (m: mat[n]) = m
   }
   module upper = {
-    open (mk_upper_triangular_mat T)
+    open (mk_upper_triangular_matrix T)
     def transpose [n] (m: mat[n]) = m
     def smm a b = transpose (lower.smm (transpose b) (transpose a))
   }

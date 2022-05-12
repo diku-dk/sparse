@@ -12,7 +12,7 @@ import "../segmented/segmented"
 import "../linalg/linalg"
 import "../sorts/merge_sort"
 
-import "matrix"
+import "matrix_irregular"
 
 -- | Module type including modules for compressed sparse row matrix
 -- operations (`csr`) and compressed sparse column matrix operations
@@ -26,10 +26,10 @@ local module type compressed = {
   type~ csr [n][m]
   type~ csc [n][m]
 
-  -- | Compressed sparse row
+  -- | Compressed sparse row representation.
   module csr : {
-    include matrix with t = t
-                   with mat [n][m] = csr[n][m]
+    include matrix_irregular with t = t
+                             with mat [n][m] = csr[n][m]
     -- | Matrix transposition.
     val transpose [n][m] : mat[n][m] -> csc[m][n]
     -- | Sparse matrix vector multiplication. Given a sparse `n` times
@@ -39,16 +39,18 @@ local module type compressed = {
     val smvm      [n][m] : mat[n][m] -> [m]t -> [n]t
   }
 
-  -- | Compressed sparse column
+  -- | Compressed sparse column representation.
   module csc : {
-    include matrix with t = t
-                   with mat [n][m] = csc[n][m]
+    include matrix_irregular with t = t
+                             with mat [n][m] = csc[n][m]
     -- | Matrix transposition.
     val transpose [n][m] : mat[n][m] -> csr[m][n]
+    -- | Vector sparse matrix multiplication.
+    val vsmm      [n][m] : [n]t -> mat[n][m] -> [m]t
   }
 
   -- | Sparse matrix-matrix multiplication.
-  val smm [n][m][k] : csr[n][m] -> csc[m][k] -> csr[n][k]
+  val smsmm [n][m][k] : csr[n][m] -> csc[m][k] -> csr[n][k]
 }
 
 -- | Parameterised compressed sparse matrix module with individual
@@ -208,13 +210,17 @@ module mk_compressed (T : field) : compressed with t = T.t = {
     def transpose [n][m] (mat:csr.mat[n][m]) : csr.mat[n][m] =
       mat
 
+    def vsmm [n][m] (a:[n]t) (b:csr.mat[m][n]) : [m]t =
+      csr.smvm (transpose b) a
+
     type~ mat[n][m] = csr.mat[m][n]
   }
 
   type~ csr[n][m] = csr.mat[n][m]
   type~ csc[n][m] = csc.mat[n][m]
 
-  -- SMM (sparse matrix multiply) algorithm for C[n][k] := A[n][m] * B[m][k]
+  -- SMSMM (sparse matrix - sparse matrix multiply) algorithm
+  -- for C[n][k] := A[n][m] * B[m][k]
   -- Assumption: A is in CSR format; B is in CSC format
   --  1. expand each row in A into contributions to elements in C
   --  2. expand each column in B into contributions to elements in C
@@ -249,7 +255,7 @@ module mk_compressed (T : field) : compressed with t = T.t = {
 	(c.s == c'.s &&
 	 (c.v T.< c'.v || eq c.v c'.v))))))
 
-  def smm [n][m][k] (A:csr[n][m]) (B:csc[m][k]) : csr[n][k] =
+  def smsmm [n][m][k] (A:csr[n][m]) (B:csc[m][k]) : csr[n][k] =
     let szsA = szs A
     let szsB = szs B
     let szA r = szsA[r]
