@@ -14,8 +14,8 @@ import "../sorts/merge_sort"
 import "matrix_regular"
 
 -- | Module type including submodules for mono sparse row matrix
--- operations (`msr`) and mono sparse column matrix operations
--- (`msc`). Notice that the abstract matrix types `msr` and `msc` are
+-- operations (`sr`) and mono sparse column matrix operations
+-- (`sc`). Notice that the abstract matrix types `sr` and `sc` are
 -- *not* size-lifted as their representations are regular.  The module
 -- type is declared `local` to avoid that outside code makes direct
 -- use of the module type (allowing it to be extended in minor
@@ -23,15 +23,15 @@ import "matrix_regular"
 
 local module type mono = {
   type t
-  type msr [n][m]
-  type msc [n][m]
+  type sr [n][m]
+  type sc [n][m]
 
   -- | Mono sparse row representation.
-  module msr : {
+  module sr : {
     include matrix_regular with t = t
-                           with mat [n][m] = msr[n][m]
+                           with mat [n][m] = sr[n][m]
     -- | Matrix transposition.
-    val transpose [n][m] : mat[n][m] -> msc[m][n]
+    val transpose [n][m] : mat[n][m] -> sc[m][n]
     -- | Sparse matrix vector multiplication. Given a sparse `n` times
     -- `m` matrix and a vector of size `m`, the function returns a
     -- vector of size `n`, the result of multiplying the argument
@@ -40,11 +40,11 @@ local module type mono = {
   }
 
   -- | Mono sparse column representation.
-  module msc : {
+  module sc : {
     include matrix_regular with t = t
-                           with mat [n][m] = msc [n][m]
+                           with mat [n][m] = sc [n][m]
     -- | Matrix transposition.
-    val transpose [n][m] : mat[n][m] -> msr[m][n]
+    val transpose [n][m] : mat[n][m] -> sr[m][n]
     -- | Vector sparse matrix multiplication.
     val vsmm      [n][m] : [n]t -> mat[n][m] -> [m]t
   }
@@ -86,7 +86,7 @@ module mk_mono (T : field) : mono with t = T.t = {
 
 
   -- mono sparse row
-  module msr = {
+  module sr = {
     type t = t
     type mat[n][m] = {col_idx:[n]i64, vals: [n]t, dummy_m: [m]()}
 
@@ -148,44 +148,44 @@ module mk_mono (T : field) : mono with t = T.t = {
   }
 
   -- mono sparse column
-  module msc = {
+  module sc = {
 
     type t = t
 
-    def zero (n:i64) (m:i64) : msr.mat[m][n] =
-      msr.zero m n
+    def zero (n:i64) (m:i64) : sr.mat[m][n] =
+      sr.zero m n
 
-    def scale [n][m] (v:t) (mat:msr.mat[n][m]) : msr.mat[n][m] =
-      msr.scale v mat
+    def scale [n][m] (v:t) (mat:sr.mat[n][m]) : sr.mat[n][m] =
+      sr.scale v mat
 
-    def eye (n:i64) (m:i64) : msr.mat[m][n] =
-      msr.eye m n
+    def eye (n:i64) (m:i64) : sr.mat[m][n] =
+      sr.eye m n
 
-    def nnz [n][m] (mat:msr.mat[n][m]) : i64 =
-      msr.nnz mat
+    def nnz [n][m] (mat:sr.mat[n][m]) : i64 =
+      sr.nnz mat
 
-    def coo [n][m] (mat: msr.mat[n][m]) : ?[nnz].[nnz](i64,i64,t) =
-      msr.coo mat |> map (\(r,c,v) -> (c,r,v))
+    def coo [n][m] (mat: sr.mat[n][m]) : ?[nnz].[nnz](i64,i64,t) =
+      sr.coo mat |> map (\(r,c,v) -> (c,r,v))
 
-    def sparse [nnz] (n:i64) (m:i64) (coo: [nnz](i64,i64,t)) : msr.mat[m][n] =
-      map (\(r,c,v) -> (c,r,v)) coo |> msr.sparse m n
+    def sparse [nnz] (n:i64) (m:i64) (coo: [nnz](i64,i64,t)) : sr.mat[m][n] =
+      map (\(r,c,v) -> (c,r,v)) coo |> sr.sparse m n
 
-    def dense [n][m] (mat: msr.mat[n][m]) : [m][n]t =
-      msr.dense mat |> transpose
+    def dense [n][m] (mat: sr.mat[n][m]) : [m][n]t =
+      sr.dense mat |> transpose
 
-    def (+) x y = x msr.+ y
-    def (-) x y = x msr.- y
+    def (+) x y = x sr.+ y
+    def (-) x y = x sr.- y
 
-    def transpose [n][m] (mat:msr.mat[n][m]) : msr.mat[n][m] =
+    def transpose [n][m] (mat:sr.mat[n][m]) : sr.mat[n][m] =
       mat
 
-    def vsmm [n][m] (a:[n]t) (b:msr.mat[m][n]) : [m]t =
-      msr.smvm (transpose b) a
+    def vsmm [n][m] (a:[n]t) (b:sr.mat[m][n]) : [m]t =
+      sr.smvm (transpose b) a
 
-    type mat[n][m] = msr.mat[m][n]
+    type mat[n][m] = sr.mat[m][n]
   }
 
-  type msr[n][m] = msr.mat[n][m]
-  type msc[n][m] = msc.mat[n][m]
+  type sr[n][m] = sr.mat[n][m]
+  type sc[n][m] = sc.mat[n][m]
 
 }

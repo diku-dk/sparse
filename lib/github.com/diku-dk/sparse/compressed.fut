@@ -16,22 +16,22 @@ import "matrix_irregular"
 
 -- | Module type including modules for compressed sparse row matrix
 -- operations (`csr`) and compressed sparse column matrix operations
--- (`csc`). The abstract matrix types `csr` and `csc` are size-lifted
+-- (`sc`). The abstract matrix types `sr` and `sc` are size-lifted
 -- to indicate their potential irregular structure. The module type is
 -- declared `local` to avoid that outside code makes direct use of the
 -- module type (allowing it to be extended in minor revisions).
 
 local module type compressed = {
   type t
-  type~ csr [n][m]
-  type~ csc [n][m]
+  type~ sr [n][m]
+  type~ sc [n][m]
 
   -- | Compressed sparse row representation.
-  module csr : {
+  module sr : {
     include matrix_irregular with t = t
-                             with mat [n][m] = csr[n][m]
+                             with mat [n][m] = sr[n][m]
     -- | Matrix transposition.
-    val transpose [n][m] : mat[n][m] -> csc[m][n]
+    val transpose [n][m] : mat[n][m] -> sc[m][n]
     -- | Sparse matrix vector multiplication. Given a sparse `n` times
     -- `m` matrix and a vector of size `m`, the function returns a
     -- vector of size `n`, the result of multiplying the argument matrix
@@ -40,17 +40,17 @@ local module type compressed = {
   }
 
   -- | Compressed sparse column representation.
-  module csc : {
+  module sc : {
     include matrix_irregular with t = t
-                             with mat [n][m] = csc[n][m]
+                             with mat [n][m] = sc[n][m]
     -- | Matrix transposition.
-    val transpose [n][m] : mat[n][m] -> csr[m][n]
+    val transpose [n][m] : mat[n][m] -> sr[m][n]
     -- | Vector sparse matrix multiplication.
     val vsmm      [n][m] : [n]t -> mat[n][m] -> [m]t
   }
 
   -- | Sparse matrix-matrix multiplication.
-  val smsmm [n][m][k] : csr[n][m] -> csc[m][k] -> csr[n][k]
+  val smsmm [n][m][k] : sr[n][m] -> sc[m][k] -> sr[n][k]
 }
 
 -- | Parameterised compressed sparse matrix module with individual
@@ -86,7 +86,7 @@ module mk_compressed (T : field) : compressed with t = T.t = {
   def norm_coo [nnz] (coo: coo[nnz]) : coo[] =
     sort_coo coo |> merge_coo
 
-  module csr = {
+  module sr = {
 
     type t = t
 
@@ -112,9 +112,9 @@ module mk_compressed (T : field) : compressed with t = T.t = {
 	  vals=replicate e one_val
 	  }
 
-    def dense [n][m] (csr: mat[n][m]) : [n][m]t =
+    def dense [n][m] (sr: mat[n][m]) : [n][m]t =
       let [nnz] {row_off: [n]i64, col_idx: [nnz]i64, vals: [nnz]t,
-		 dummy_m=_} = csr
+		 dummy_m=_} = sr
       let roff0 (i:i64) = if i == 0 then 0 else row_off[i-1]
       let rs = map2 (\i r -> (i,r - roff0 i))
 		    (iota n)
@@ -124,11 +124,11 @@ module mk_compressed (T : field) : compressed with t = T.t = {
       let arr : *[n][m]t = tabulate_2d n m (\ _ _ -> T.i64 0)
       in scatter_2d arr iss vals
 
-    def smvm [n][m] (csr:mat[n][m]) (v:[m]t) : [n]t =
+    def smvm [n][m] (sr:mat[n][m]) (v:[m]t) : [n]t =
       -- expand each row into an irregular number of multiplications, then
       -- do a segmented reduction with + and 0.
       let [nnz] {row_off: [n]i64, col_idx: [nnz]i64, vals: [nnz]t,
-		 dummy_m=_} = csr
+		 dummy_m=_} = sr
       let roff0 (i:i64) = if i == 0 then 0 else row_off[i-1]
       let rows = map2 (\i r -> (i,
 				roff0 i,
@@ -138,9 +138,9 @@ module mk_compressed (T : field) : compressed with t = T.t = {
       let get r i = (T.*) (vals[r.1+i]) (v[col_idx[r.1+i]])
       in (expand_outer_reduce sz get (T.+) (T.i64 0) rows) :> [n]t
 
-    def scale [n][m] (v:t) (csr:mat[n][m]) : mat[n][m] =
+    def scale [n][m] (v:t) (sr:mat[n][m]) : mat[n][m] =
       let [nnz] {row_off: [n]i64, col_idx: [nnz]i64, vals: [nnz]t,
-		 dummy_m} = csr
+		 dummy_m} = sr
       in {row_off, col_idx, dummy_m,
 	  vals = map ((T.*) v) vals}
 
@@ -152,13 +152,13 @@ module mk_compressed (T : field) : compressed with t = T.t = {
       let row_off = scan (+) 0 rows
       in {row_off, col_idx, vals, dummy_m=replicate m ()}
 
-    def nnz [n][m] (csr:mat[n][m]) : i64 =
-      map (\v -> if eq v zero_val then 0 else 1) csr.vals
+    def nnz [n][m] (sr:mat[n][m]) : i64 =
+      map (\v -> if eq v zero_val then 0 else 1) sr.vals
       |> reduce (+) 0
 
-    def coo [n][m] (csr:mat[n][m]) =
+    def coo [n][m] (sr:mat[n][m]) =
       let [nnz] {row_off: [n]i64, col_idx: [nnz]i64, vals: [nnz]t,
-		 dummy_m= _} = csr
+		 dummy_m= _} = sr
       let ns = map3 (\i a b ->
 		       let a = if i == n-1 then nnz else a
 		       let b = if i == 0 then 0i64 else b
@@ -169,55 +169,55 @@ module mk_compressed (T : field) : compressed with t = T.t = {
       let row_idx = replicated_iota ns :> [nnz]i64
       in zip3 row_idx col_idx vals
 
-    def (+) [n][m] (csr1:mat[n][m]) (csr2:mat[n][m]) : mat[n][m] =
-      (coo csr1 ++ coo csr2) |> sparse n m
+    def (+) [n][m] (sr1:mat[n][m]) (sr2:mat[n][m]) : mat[n][m] =
+      (coo sr1 ++ coo sr2) |> sparse n m
 
-    def (-) [n][m] (csr1:mat[n][m]) (csr2:mat[n][m]) : mat[n][m] =
-      (coo csr1 ++ coo (scale (T.i64(-1)) csr2)) |> sparse n m
+    def (-) [n][m] (sr1:mat[n][m]) (sr2:mat[n][m]) : mat[n][m] =
+      (coo sr1 ++ coo (scale (T.i64(-1)) sr2)) |> sparse n m
 
     def transpose [n][m] (mat:mat[n][m]) : mat[n][m] =
       mat
   }
 
-  module csc = {
+  module sc = {
 
     type t = t
 
-    def zero (n:i64) (m:i64) : csr.mat[m][n] =
-      csr.zero m n
+    def zero (n:i64) (m:i64) : sr.mat[m][n] =
+      sr.zero m n
 
-    def scale [n][m] (v:t) (mat:csr.mat[n][m]) : csr.mat[n][m] =
-      csr.scale v mat
+    def scale [n][m] (v:t) (mat:sr.mat[n][m]) : sr.mat[n][m] =
+      sr.scale v mat
 
-    def eye (n:i64) (m:i64) : csr.mat[m][n] =
-      csr.eye m n
+    def eye (n:i64) (m:i64) : sr.mat[m][n] =
+      sr.eye m n
 
-    def nnz [n][m] (mat:csr.mat[n][m]) : i64 =
-      csr.nnz mat
+    def nnz [n][m] (mat:sr.mat[n][m]) : i64 =
+      sr.nnz mat
 
-    def coo [n][m] (mat: csr.mat[n][m]) : ?[nnz].[nnz](i64,i64,t) =
-      csr.coo mat |> map (\(r,c,v) -> (c,r,v))
+    def coo [n][m] (mat: sr.mat[n][m]) : ?[nnz].[nnz](i64,i64,t) =
+      sr.coo mat |> map (\(r,c,v) -> (c,r,v))
 
-    def sparse [nnz] (n:i64) (m:i64) (coo: [nnz](i64,i64,t)) : csr.mat[m][n] =
-      map (\(r,c,v) -> (c,r,v)) coo |> csr.sparse m n
+    def sparse [nnz] (n:i64) (m:i64) (coo: [nnz](i64,i64,t)) : sr.mat[m][n] =
+      map (\(r,c,v) -> (c,r,v)) coo |> sr.sparse m n
 
-    def dense [n][m] (mat: csr.mat[n][m]) : [m][n]t =
-      csr.dense mat |> transpose
+    def dense [n][m] (mat: sr.mat[n][m]) : [m][n]t =
+      sr.dense mat |> transpose
 
-    def (+) x y = x csr.+ y
-    def (-) x y = x csr.- y
+    def (+) x y = x sr.+ y
+    def (-) x y = x sr.- y
 
-    def transpose [n][m] (mat:csr.mat[n][m]) : csr.mat[n][m] =
+    def transpose [n][m] (mat:sr.mat[n][m]) : sr.mat[n][m] =
       mat
 
-    def vsmm [n][m] (a:[n]t) (b:csr.mat[m][n]) : [m]t =
-      csr.smvm (transpose b) a
+    def vsmm [n][m] (a:[n]t) (b:sr.mat[m][n]) : [m]t =
+      sr.smvm (transpose b) a
 
-    type~ mat[n][m] = csr.mat[m][n]
+    type~ mat[n][m] = sr.mat[m][n]
   }
 
-  type~ csr[n][m] = csr.mat[n][m]
-  type~ csc[n][m] = csc.mat[n][m]
+  type~ sr[n][m] = sr.mat[n][m]
+  type~ sc[n][m] = sc.mat[n][m]
 
   -- SMSMM (sparse matrix - sparse matrix multiply) algorithm
   -- for C[n][k] := A[n][m] * B[m][k]
@@ -231,15 +231,15 @@ module mk_compressed (T : field) : compressed with t = T.t = {
   def swap_rc ({r,c,v} : contrib) : contrib =
     {r=c,c=r,v}
 
-  def szs [n][m] (csr:csr[n][m]) : [n]i64 =
-    map2 (\i r -> if i == 0 then r else r - csr.row_off[i-1])
-	 (iota n) csr.row_off
+  def szs [n][m] (sr:sr[n][m]) : [n]i64 =
+    map2 (\i r -> if i == 0 then r else r - sr.row_off[i-1])
+	 (iota n) sr.row_off
 
-  def get_contrib [n][m] (csr:csr[n][m]) (r:i64) (i:i64) : contrib =
-    let roff = if r == 0 then 0 else csr.row_off[r-1]
+  def get_contrib [n][m] (sr:sr[n][m]) (r:i64) (i:i64) : contrib =
+    let roff = if r == 0 then 0 else sr.row_off[r-1]
     in { r = r,
-	 v = csr.vals[roff+i],
-	 c = csr.col_idx[roff+i] }
+	 v = sr.vals[roff+i],
+	 c = sr.col_idx[roff+i] }
 
   type option 't = #None | #Some t
   type contr = {tr:i64, tc:i64, s:i64, v:t}
@@ -255,7 +255,7 @@ module mk_compressed (T : field) : compressed with t = T.t = {
 	(c.s == c'.s &&
 	 (c.v T.< c'.v || eq c.v c'.v))))))
 
-  def smsmm [n][m][k] (A:csr[n][m]) (B:csc[m][k]) : csr[n][k] =
+  def smsmm [n][m][k] (A:sr[n][m]) (B:sc[m][k]) : sr[n][k] =
     let szsA = szs A
     let szsB = szs B
     let szA r = szsA[r]
@@ -318,5 +318,5 @@ module mk_compressed (T : field) : compressed with t = T.t = {
 	  )
 
     let coos = map (\c -> (c.tr,c.tc,c.v)) contribs3
-    in csr.sparse n k coos
+    in sr.sparse n k coos
 }

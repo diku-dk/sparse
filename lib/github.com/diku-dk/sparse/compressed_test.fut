@@ -8,7 +8,7 @@ module compressed = mk_compressed { open i32 def fma a b c : i32 = a * b + c }
 -- CSR Tests
 -- *************
 
-module csr = compressed.csr
+module csr = compressed.sr
 
 -- ==
 -- entry: test_csr_eye
@@ -82,7 +82,7 @@ entry test_csr_coo [k] (n:i64) (m:i64) (xs:[k]i64) (ys:[k]i64) (vs: [k]csr.t)
 -- CSC Tests
 -- *************
 
-module csc = compressed.csc
+module csc = compressed.sc
 
 -- ==
 -- entry: test_csc_eye

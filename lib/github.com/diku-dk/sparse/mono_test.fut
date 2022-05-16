@@ -8,7 +8,7 @@ module mono = mk_mono { open i32 def fma a b c : i32 = a * b + c }
 -- MSR Tests
 -- *************
 
-module msr = mono.msr
+module msr = mono.sr
 
 -- ==
 -- entry: test_msr_eye
@@ -80,7 +80,7 @@ entry test_msr_coo [k] (n:i64) (m:i64) (xs:[k]i64) (ys:[k]i64) (vs: [k]msr.t)
 -- MSC Tests
 -- *************
 
-module msc = mono.msc
+module msc = mono.sc
 
 -- ==
 -- entry: test_msc_eye
