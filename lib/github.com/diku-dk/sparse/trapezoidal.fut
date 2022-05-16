@@ -17,7 +17,7 @@ import "../segmented/segmented"
 -- | The module type of a trapezoidal matrix.  This module type leaves
 -- it unstated whether it is an upper or lower trapezoidal matrix, but
 -- specific instantiations make it clear.
-module type trapezoidal_mat = {
+module type trapezoidal_matrix = {
   -- | The scalar type.
   type t
   -- | The type of `n` times `m` trapezoidal matrices.
@@ -63,18 +63,18 @@ local def elements_lower (n:i64) (m:i64) =
 
 -- Row in a lower-triangular array, given the value index (solution to
 -- a second-degree equation)
-def row (i:i64) =
+local def row (i:i64) =
   i64.f64 (f64.ceil ((f64.sqrt(f64.i64(9+8*i))-1)/2))-1
 
 -- lower: row major, upper: column major
-def row_lower (n:i64) (m:i64) (i:i64) =
+local def row_lower (n:i64) (m:i64) (i:i64) =
   let k = i64.min n m
   let e = elements k
   let () = assert (n >= m || i < e) ()
   in if i < e then row i
      else k + (i64.max (i - e) 0) / m
 
-def col_lower (n:i64) (m:i64) (i:i64) =
+local def col_lower (n:i64) (m:i64) (i:i64) =
   let k = i64.min n m
   let e = elements k
   let () = assert (n >= m || i < e) ()
@@ -89,7 +89,7 @@ local module type ranking = {
   val datasz : (i64,i64) -> i64
 }
 
-local module mk_trapezoidal_mat (T:field) (R:ranking) = {
+local module mk_trapezoidal_matrix (T:field) (R:ranking) = {
   type t = T.t
 
   type~ mat [n][m] =
@@ -151,7 +151,7 @@ local module mk_trapezoidal_mat (T:field) (R:ranking) = {
     tra with data = map f tra.data
 }
 
-module rank_lower = {
+local module rank_lower = {
   def rank (n,m) (i,j) =
     if m > n || i <= m then elements i + j
     else elements m + (i-m) * m + j
@@ -175,11 +175,11 @@ local module rank_upper = {
     rank_lower.datasz (m,n)
 }
 
-local module mk_lower_trapezoidal_mat (T: field) =
-  mk_trapezoidal_mat T rank_lower
+local module mk_lower_trapezoidal_matrix (T: field) =
+  mk_trapezoidal_matrix T rank_lower
 
-local module mk_upper_trapezoidal_mat (T: field) =
-  mk_trapezoidal_mat T rank_upper
+local module mk_upper_trapezoidal_matrix (T: field) =
+  mk_trapezoidal_matrix T rank_upper
 
 -- | The type of modules implementing trapezoidal matrices, with
 -- distinct submodules and types for lower and upper trapezoidal
@@ -193,14 +193,14 @@ module type trapezoidal = {
   type~ upper[n][m]
   -- | Operations on lower trapezoidal matrices.
   module lower : {
-    include trapezoidal_mat with t = t with mat [n][m] = lower[n][m]
+    include trapezoidal_matrix with t = t with mat [n][m] = lower[n][m]
     -- | Transpose lower trapezoidal matrix, producing upper
     -- trapezoidal matrix. O(1).
     val transpose [n][m] : lower[n][m] -> upper[m][n]
   }
   -- | Operations on upper trapezoidal matrices.
   module upper : {
-    include trapezoidal_mat with t = t with mat [n][m] = upper[n][m]
+    include trapezoidal_matrix with t = t with mat [n][m] = upper[n][m]
     -- | Transpose upper trapezoidal matrix, producing lower trapezoidal
     -- matrix.  O(1).
     val transpose [n][m] : upper[n][m] -> lower[m][n]
@@ -212,12 +212,12 @@ module type trapezoidal = {
 module mk_trapezoidal (T: field) : trapezoidal with t = T.t = {
   type t = T.t
   module lower = {
-    open (mk_lower_trapezoidal_mat T)
+    open (mk_lower_trapezoidal_matrix T)
     def transpose [n][m] (a: mat[n][m]) : mat[m][n] =
       a with size = []
   }
   module upper = {
-    open (mk_upper_trapezoidal_mat T)
+    open (mk_upper_trapezoidal_matrix T)
     def transpose [n][m] (a: mat[n][m]) : mat[m][n] =
       a with size = []
     def smm a b = transpose (lower.smm (transpose b) (transpose a))

@@ -1,14 +1,14 @@
 -- | ignore
 
-import "sparse"
+import "compressed"
 
-module sparse = mk_sparse { open i32 def fma a b c : i32 = a * b + c }
+module compressed = mk_compressed { open i32 def fma a b c : i32 = a * b + c }
 
 -- *************
 -- CSR Tests
 -- *************
 
-module csr = sparse.csr
+module csr = compressed.csr
 
 -- ==
 -- entry: test_csr_eye
@@ -82,7 +82,7 @@ entry test_csr_coo [k] (n:i64) (m:i64) (xs:[k]i64) (ys:[k]i64) (vs: [k]csr.t)
 -- CSC Tests
 -- *************
 
-module csc = sparse.csc
+module csc = compressed.csc
 
 -- ==
 -- entry: test_csc_eye
@@ -156,7 +156,7 @@ entry test_csc_transpose [k] (n:i64) (m:i64) (xs:[k]i64) (ys:[k]i64) (vs: [k]csc
   csc.sparse n m (zip3 xs ys vs) |> csc.transpose |> csr.dense
 
 -- ==
--- entry: test_smm
+-- entry: test_smsmm
 -- input { 2i64 2i64 2i64 [0i64] [1i64] [1] [1i64] [0i64] [1] }
 -- output { [[1,0],[0,0]] }
 -- input { 2i64 2i64 2i64 [1i64] [0i64] [1] [0i64] [1i64] [1] }
@@ -169,10 +169,10 @@ entry test_csc_transpose [k] (n:i64) (m:i64) (xs:[k]i64) (ys:[k]i64) (vs: [k]csc
 --                        [0i64,0i64,1i64,1i64] [0i64,1i64,0i64,1i64] [3,3,5,2] }
 -- output { [[38,17],[26,14]] }
 
-entry test_smm [k1][k2] (n:i64) (m:i64) (k:i64)
-                        (xs1:[k1]i64) (ys1:[k1]i64) (vs1: [k1]csc.t)
-                        (xs2:[k2]i64) (ys2:[k2]i64) (vs2: [k2]csc.t)
+entry test_smsmm [k1][k2] (n:i64) (m:i64) (k:i64)
+                          (xs1:[k1]i64) (ys1:[k1]i64) (vs1: [k1]csc.t)
+                          (xs2:[k2]i64) (ys2:[k2]i64) (vs2: [k2]csc.t)
     : [][]csr.t =
   let A = csr.sparse n m (zip3 xs1 ys1 vs1)
   let B = csc.sparse m k (zip3 xs2 ys2 vs2)
-  in sparse.smm A B |> csr.dense
+  in compressed.smsmm A B |> csr.dense

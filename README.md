@@ -12,11 +12,12 @@ $ futhark pkg sync
 ## Usage
 
 ```
-> import "lib/github.com/diku-dk/sparse/sparse"
-> module sp = sparse f64
-> let A = sp.csr.sparse 2 3 [(0,0,2),(1,2,3)]
-> sp.csr.smvm A [10,20,30]
-[20,90]
+$ futhark repl
+[0]> import "lib/github.com/diku-dk/sparse/compressed"
+[1]> module sp = mk_compressed f64
+[2]> let A = sp.csr.sparse 2 3 [(0,0,2),(1,2,3)]
+[3]> sp.csr.smvm A [10,20,30]
+[20.0f64, 90.0f64]
 ```
 
 ## See also
