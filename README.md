@@ -16,7 +16,7 @@ $ futhark repl
 [0]> import "lib/github.com/diku-dk/sparse/compressed"
 [1]> module compressed = mk_compressed f64
 [2]> let A = compressed.sr.sparse 2 3 [(0,0,2),(1,2,3)]
-[3]> sp.csr.smvm A [10,20,30]
+[3]> compressed.sr.smvm A [10,20,30]
 [20.0f64, 90.0f64]
 ```
 
