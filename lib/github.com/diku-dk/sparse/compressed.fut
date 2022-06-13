@@ -112,6 +112,13 @@ module mk_compressed (T : field) : compressed with t = T.t = {
 	  vals=replicate e one_val
 	  }
 
+    def diag [n] (v:[n]t) : mat[n][n] =
+      {dummy_m = replicate n (),
+       row_off=map (+1) (iota n),
+       col_idx=iota n,
+       vals=v
+      }
+
     def dense [n][m] (sr: mat[n][m]) : [n][m]t =
       let [nnz] {row_off: [n]i64, col_idx: [nnz]i64, vals: [nnz]t,
 		 dummy_m=_} = sr
@@ -191,6 +198,9 @@ module mk_compressed (T : field) : compressed with t = T.t = {
 
     def eye (n:i64) (m:i64) : sr.mat[m][n] =
       sr.eye m n
+
+    def diag [n] (v:[n]t) : sr.mat[n][n] =
+      sr.diag v
 
     def nnz [n][m] (mat:sr.mat[n][m]) : i64 =
       sr.nnz mat

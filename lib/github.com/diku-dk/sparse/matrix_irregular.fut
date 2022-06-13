@@ -14,6 +14,8 @@ module type matrix_irregular = {
   -- | The eye. Given `n` and `m`, the function returns an `n` times
   -- `m` sparse matrix with ones in the diagonal and zeros elsewhere.
   val eye          : (n:i64) -> (m:i64) -> mat[n][m]
+  -- | The diagonal matrix with zeros everywhere but in the diagonal.
+  val diag     [n] : [n]t -> mat[n][n]
   -- | Convert to dense format. Given a sparse matrix, the function
   -- returns a dense representation of the matrix.
   val dense [n][m] : mat[n][m] -> [n][m]t

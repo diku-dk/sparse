@@ -100,6 +100,11 @@ module mk_mono (T : field) : mono with t = T.t = {
        vals=replicate n one_val,
        dummy_m=replicate m ()}
 
+    def diag [n] (v:[n]t) : mat[n][n] =
+      {col_idx=iota n,
+       vals=v,
+       dummy_m=replicate n ()}
+
     def dense [n][m] ({col_idx,vals,dummy_m=_}: mat[n][m]) : [n][m]t =
       let A = tabulate_2d n m (\_ _ -> zero_val)
       in scatter_2d A (zip (iota n) col_idx) vals
@@ -160,6 +165,9 @@ module mk_mono (T : field) : mono with t = T.t = {
 
     def eye (n:i64) (m:i64) : sr.mat[m][n] =
       sr.eye m n
+
+    def diag [n] (v:[n]t) : sr.mat[n][n] =
+      sr.diag v
 
     def nnz [n][m] (mat:sr.mat[n][m]) : i64 =
       sr.nnz mat

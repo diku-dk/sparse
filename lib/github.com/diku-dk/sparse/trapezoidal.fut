@@ -24,10 +24,12 @@ module type trapezoidal_matrix = {
   type~ mat[n][m]
   -- | The zero matrix. Given `n` and `m`, the function returns an `n`
   -- times `m` empty sparse matrix (zeros everywhere).
-  val zero  : (n:i64) -> (m:i64) -> mat[n][m]
+  val zero          : (n:i64) -> (m:i64) -> mat[n][m]
   -- | The eye. Given `n` and `m`, the function returns an `n` times
   -- `m` sparse matrix with ones in the diagonal and zeros elsewhere.
-  val eye   : (n:i64) -> (m:i64) -> mat[n][m]
+  val eye           : (n:i64) -> (m:i64) -> mat[n][m]
+  -- | The diagonal matrix with zeros everywhere but in the diagonal.
+  val diag      [n] : [n]t -> mat[n][n]
   -- Constructs trapezoidal matrix from dense array.  Elements on the
   -- zero side of the the diagonal are ignored.
   val trapezoidal [n][m] : [n][m]t -> mat[n][m]
@@ -118,6 +120,10 @@ local module mk_trapezoidal_matrix (T:field) (R:ranking) = {
 
   def eye n m =
     trapezoidal (tabulate_2d n m (\i j -> T.i64 (i64.bool (i==j))))
+
+  def diag [n] (v:[n]t) =
+    trapezoidal (tabulate_2d n n (\i j ->
+				    if i==j then v[i] else T.i64 0))
 
   def scale [n][m] s (tra:mat[n][m]) : mat[n][m] =
     tra with data = map (T.*s) tra.data

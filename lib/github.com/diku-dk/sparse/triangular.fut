@@ -22,11 +22,13 @@ module type triangular_matrix = {
   type~ mat[n]
   -- | The zero matrix. Given `n`, the function returns an `n`
   -- times `n` empty sparse matrix (zeros everywhere).
-  val zero    : (n:i64) -> mat[n]
+  val zero      : (n:i64) -> mat[n]
   -- | Identity matrix. Given `n`, the function returns an `n`
   -- times `n` sparse matrix with ones in the diagonal and zeros
   -- elsewhere.
-  val eye     : (n:i64) -> mat[n]
+  val eye       : (n:i64) -> mat[n]
+  -- | The diagonal matrix with zeros everywhere but in the diagonal.
+  val diag  [n] : [n]t -> mat[n]
   -- Constructs triangular matrix from dense array.  All elements on
   -- the zero side of the the diagonal is ignored.
   val triangular [n] : [n][n]t -> mat[n]
@@ -90,6 +92,10 @@ local module mk_triangular_matrix (T : field) (R: ranking) = {
 
   def eye n =
     triangular (tabulate_2d n n (\i j -> T.i64 (i64.bool (i==j))))
+
+  def diag [n] (v:[n]t) =
+    triangular (tabulate_2d n n (\i j ->
+				   if i==j then v[i] else T.i64 0))
 
   def scale s (tri: mat[]) =
     tri with data = map (T.*s) tri.data
