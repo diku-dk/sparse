@@ -75,6 +75,18 @@ entry test_msr_coo [k] (n:i64) (m:i64) (xs:[k]i64) (ys:[k]i64) (vs: [k]msr.t)
     : ([]i64,[]i64,[]msr.t) =
   msr.sparse n m (zip3 xs ys vs) |> msr.coo |> unzip3
 
+-- ==
+-- entry: test_msr_vsmm
+-- input { 4i64 2i64
+--         [10,20,30,40]
+--         [0i64,1i64,2i64,3i64]
+--         [0i64,0i64,1i64,0i64]
+--         [1,2,3,4]
+-- }
+-- output { [210,90] }
+entry test_msr_vsmm [k] (n:i64) (m:i64) (v:[n]msr.t) (xs:[k]i64) (ys:[k]i64) (vs: [k]msr.t) : [m]msr.t =
+  let M = msr.sparse n m (zip3 xs ys vs)
+  in msr.vsmm v M
 
 -- *************
 -- MSC Tests

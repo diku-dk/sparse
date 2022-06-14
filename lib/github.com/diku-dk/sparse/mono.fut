@@ -37,6 +37,10 @@ local module type mono = {
     -- vector of size `n`, the result of multiplying the argument
     -- matrix with the argument vector.
     val smvm      [n][m] : mat[n][m] -> [m]t -> [n]t
+    -- | Vector sparse matrix multiplication.
+    val vsmm      [n][m] : [n]t -> mat[n][m] -> [m]t
+    -- | Dense matrix sparse matrix multiplication.
+    val dmsmm  [n][m][k] : [n][k]t -> mat[k][m] -> [n][m]t
   }
 
   -- | Mono sparse column representation.
@@ -150,6 +154,12 @@ module mk_mono (T : field) : mono with t = T.t = {
     def smvm [n][m] ({col_idx,vals,dummy_m=_}:mat[n][m]) (v:[m]t) : [n]t =
       map2 (\c w -> w T.* v[c]) col_idx vals
 
+    def vsmm [n][m] (v:[n]t) ({col_idx,vals,dummy_m=_}:mat[n][m]) : [m]t =
+      let (is,xs) = map3 (\x i y -> (i,x T.* y)) v col_idx vals |> unzip
+      in reduce_by_index (replicate m (T.i64 0)) (T.+) (T.i64 0) is xs
+
+    def dmsmm [n][m][k] (D:[n][k]t) (S:mat[k][m]) : [n][m]t =
+      map (\r -> vsmm r S) D
   }
 
   -- mono sparse column
