@@ -2,7 +2,7 @@
 
 import "compressed"
 
-module compressed = mk_compressed { open i32 def fma a b c : i32 = a * b + c }
+module compressed = mk_compressed i32
 
 -- *************
 -- CSR Tests

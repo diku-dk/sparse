@@ -8,9 +8,9 @@
 -- matrix).
 
 import "../segmented/segmented"
-import "../linalg/linalg"
 import "../sorts/merge_sort"
 
+import "element"
 import "matrix_regular"
 
 -- | Module type including submodules for mono sparse row matrix
@@ -60,7 +60,7 @@ local module type mono = {
 -- (MSR) representation. The module is parameterised over a field
 -- (defined in the linalg package).
 
-module mk_mono (T : field) : mono with t = T.t = {
+module mk_mono (T : element) : mono with t = T.t = {
 
   type t = T.t
 

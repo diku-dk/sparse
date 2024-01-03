@@ -9,8 +9,9 @@
 -- This library supports both upper and lower triangular matrices
 -- using the same interface, but different concrete types.
 
-import "../linalg/linalg"
 import "../segmented/segmented"
+
+import "element"
 
 -- | The module type of a triangular matrix.  This module type leaves
 -- it unstated whether it is an upper or lower triangular matrix, but
@@ -63,7 +64,7 @@ local module type ranking = {
   val zero : (i64,i64) -> bool
 }
 
-local module mk_triangular_matrix (T : field) (R: ranking) = {
+local module mk_triangular_matrix (T : element) (R: ranking) = {
   type t = T.t
 
   type~ mat [n] =
@@ -134,7 +135,7 @@ local module mk_triangular_matrix (T : field) (R: ranking) = {
 local def row (i: i64) =
   i64.f64 (f64.ceil ((f64.sqrt(f64.i64(9+8*i))-1)/2))-1
 
-local module mk_lower_triangular_matrix (T: field) =
+local module mk_lower_triangular_matrix (T: element) =
   mk_triangular_matrix T {
 
   def rank (i, j) =
@@ -149,7 +150,7 @@ local module mk_lower_triangular_matrix (T: field) =
     j > i
 }
 
-local module mk_upper_triangular_matrix (T: field) =
+local module mk_upper_triangular_matrix (T: element) =
   mk_triangular_matrix T {
   def rank (i, j) =
     elements j + i
@@ -191,7 +192,7 @@ module type triangular = {
 
 -- | Create a module implementing the `triangular`@mtype module type.
 -- Usage: `module m = mk_triangular f64`.
-module mk_triangular (T: field) : triangular with t = T.t = {
+module mk_triangular (T: element) : triangular with t = T.t = {
   type t = T.t
   module lower = {
     open (mk_lower_triangular_matrix T)

@@ -2,7 +2,7 @@
 
 import "trapezoidal"
 
-module sparse = mk_trapezoidal { open i32 def fma a b c : i32 = a * b + c }
+module sparse = mk_trapezoidal i32
 
 module upper = sparse.upper
 

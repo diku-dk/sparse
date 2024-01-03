@@ -9,9 +9,9 @@
 -- zero cost) a compressed sparse column matrix (and vice versa).
 
 import "../segmented/segmented"
-import "../linalg/linalg"
 import "../sorts/merge_sort"
 
+import "element"
 import "matrix_irregular"
 
 -- | Module type including modules for compressed sparse row matrix
@@ -58,7 +58,7 @@ local module type compressed = {
 -- column (CSC) representations. The module is parameterised over a
 -- field (defined in the linalg package).
 
-module mk_compressed (T : field) : compressed with t = T.t = {
+module mk_compressed (T : element) : compressed with t = T.t = {
 
   type t = T.t
 
@@ -319,7 +319,7 @@ module mk_compressed (T : field) : compressed with t = T.t = {
     let () = assert (cn2 % 2 == 0) ()
 
     let contribs3 =
-      unflatten (cn2 / 2) 2 contribs2 |>
+      contribs2 |> sized ((cn2 / 2)*2) |> unflatten |>
       map (\cs ->
 	     let c0 = cs[0]
 	     let c1 = cs[1]

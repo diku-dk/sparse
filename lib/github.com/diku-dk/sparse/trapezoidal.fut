@@ -11,8 +11,10 @@
 -- different concrete types. Notice that trapezoidal matrices, in
 -- contrast to triangular matrices, are not required to be square.
 
-import "../linalg/linalg"
 import "../segmented/segmented"
+
+import "element"
+import "matrix_irregular"
 
 -- | The module type of a trapezoidal matrix.  This module type leaves
 -- it unstated whether it is an upper or lower trapezoidal matrix, but
@@ -91,7 +93,7 @@ local module type ranking = {
   val datasz : (i64,i64) -> i64
 }
 
-local module mk_trapezoidal_matrix (T:field) (R:ranking) = {
+local module mk_trapezoidal_matrix (T:element) (R:ranking) = {
   type t = T.t
 
   type~ mat [n][m] =
@@ -181,10 +183,10 @@ local module rank_upper = {
     rank_lower.datasz (m,n)
 }
 
-local module mk_lower_trapezoidal_matrix (T: field) =
+local module mk_lower_trapezoidal_matrix (T: element) =
   mk_trapezoidal_matrix T rank_lower
 
-local module mk_upper_trapezoidal_matrix (T: field) =
+local module mk_upper_trapezoidal_matrix (T: element) =
   mk_trapezoidal_matrix T rank_upper
 
 -- | The type of modules implementing trapezoidal matrices, with
@@ -215,7 +217,7 @@ module type trapezoidal = {
 
 -- | Create a module implementing the `trapezoidal`@mtype module type.
 -- Usage: `module m = mk_trapezoidal f64`.
-module mk_trapezoidal (T: field) : trapezoidal with t = T.t = {
+module mk_trapezoidal (T: element) : trapezoidal with t = T.t = {
   type t = T.t
   module lower = {
     open (mk_lower_trapezoidal_matrix T)

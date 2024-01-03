@@ -1,7 +1,6 @@
 package github.com/diku-dk/sparse
 
 require {
-  github.com/diku-dk/linalg 0.4.2 #0720168d510eba755a96498f660152e5f4a29eef
-  github.com/diku-dk/segmented 0.4.3 #3d86d79e757d68fb503c551e894c4ef4b091bdfc
-  github.com/diku-dk/sorts 0.4.2 #3b2cfcc0d0256df7cd1f2548f68d85f2453007a0
+  github.com/diku-dk/segmented 0.4.4 #9653ba17581771f0641d1f3f9618da6d9bc633de
+  github.com/diku-dk/sorts 0.4.3 #215e70b323b2243afb03363b5561f84ccd06dbcd
 }

@@ -2,7 +2,7 @@
 
 import "triangular"
 
-module sparse = mk_triangular { open i32 def fma a b c : i32 = a * b + c }
+module sparse = mk_triangular i32
 
 module upper = sparse.upper
 
