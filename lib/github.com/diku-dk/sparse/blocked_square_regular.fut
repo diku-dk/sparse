@@ -92,9 +92,9 @@ module type blocked_square_regular = {
 
 }
 
--- | Module for creating blocked square regular matrices. The module is
--- parameterised by a field (defined in the `linalg` package) and a block size
--- (`bsc`).
+-- | Parameterised module for creating blocked square regular matrices. The
+-- module is parameterised by a field (defined in the `linalg` package) and a
+-- block size (`bsz`).
 module blocked_square_regular (T: field) (X: {val bsz : i64})
   : blocked_square_regular with t = T.t = {
   type t = T.t
