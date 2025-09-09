@@ -6,7 +6,7 @@ import "../linalg/lu"
 
 module mat = blocked_square_regular f64 { def bsz=2i64 }
 module linalg = mk_linalg f64
-module lu = mk_lu f64
+module lu_module = mk_lu f64
 
 def eqv [n] (x:[n]f64) (y:[n]f64) =
   map2 (f64.==) x y |> reduce (&&) true
@@ -14,10 +14,10 @@ def eqv [n] (x:[n]f64) (y:[n]f64) =
 def eq [n] (a:[n][n]f64) (b:[n][n]f64) =
   map2 eqv a b |> reduce (&&) true
 
-def lower [n] 'a (z:a) (one:a)  (x:[n][n]a) : [n][n]a =
+def lower_dense [n] 'a (z:a) (one:a)  (x:[n][n]a) : [n][n]a =
   tabulate_2d n n (\r c -> if r==c then one else if r > c then x[r][c] else z)
 
-def upper [n] 'a (z:a) (x:[n][n]a) : [n][n]a =
+def upper_dense [n] 'a (z:a) (x:[n][n]a) : [n][n]a =
   tabulate_2d n n (\r c -> if r <= c then x[r][c] else z)
 
 def z = 0.0f64
@@ -34,11 +34,11 @@ def matmul = linalg.matmul
 
 entry test_simple (_e:i64) : bool =
 --  let b = lu_dense [[1,2],[3,4]]
---  let b' = matmul (lower z one b) (upper z b)
+--  let b' = matmul (lower_dense z one b) (upper_dense z b)
   let a = mk 4 [(0,0,[[1,2],[3,4]]:>[bsz][bsz]t),
 		(1,1,[[1,2],[3,4]]:>[bsz][bsz]t)]
-  let x = dense (blu_nofill a)
-  let x' = matmul (lower z one x) (upper z x)
+  let x = dense (lu_nofill a)
+  let x' = matmul (lower_dense z one x) (upper_dense z x)
   in eq (dense a) x' && dim a == 4
 
 -- ==
@@ -180,12 +180,26 @@ def g6() : mat [6] =
   in mk 6 [(0,0,b00),(0,1,b01),(1,1,b11),(2,0,b20),(2,1,b21),(2,2,b22)]
 
 -- ==
--- entry: test_blu_nofill
+-- entry: test_lu_nofill
 -- input { 2i64 } output { true }
 -- input { 4i64 } output { true }
 -- input { 6i64 } output { true }
-entry test_blu_nofill (n:i64) : bool =
+entry test_lu_nofill (n:i64) : bool =
   let m : mat [n] = (if n == 4 then g4()
 		     else if n == 6 then g6()
 		     else g2()) :> mat [n]
-  in eq (dense (blu_nofill m)) (lu.lu 2 (dense m))
+  in eq (dense (lu_nofill m)) (lu_module.lu 2 (dense m))
+
+def g14 () : mat [14] =
+  let d = diag (map f64.i64 (iota 14))
+  let b = tabulate_2d bsz bsz (\r c -> f64.i64(r*bsz+c+1))
+  let u = mk 14 [(0,2,b),(0,5,b),(1,3,b),(0,6,b)]
+  let l = mk 14 [(3,1,b),(4,0,b),(5,1,b)]
+  in add d (add u l)
+
+-- ==
+-- entry: test_lu_find_fills
+-- input { 2i64 } output { [4i64,4i64,4i64,5i64] [2i64,5i64,6i64,3i64] }
+entry test_lu_find_fills (_:i64) : ([]i64,[]i64) =
+  let a = g14()
+  in lu_find_fills a |> unzip

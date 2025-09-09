@@ -66,9 +66,30 @@ module type blocked_square_regular = {
   -- the sparse matrix `a` with the sparse matrix `b`.
   val smsmm [n] : mat [n] -> mat [n] -> mat [n]
 
-  -- | `blu_nofill a` returns a sparse blocked matrix representing an
-  -- LU-decomposition of `a`, assuming no fill-ins will occur.
-  val blu_nofill [n] : mat [n] -> mat [n]
+  -- | `lu_nofill a` returns a sparse blocked matrix representing an
+  -- LU-decomposition of `a`, assuming no fill-ins will occur. The returned
+  -- matrix `b` represents a lower triangular matrix L such that `lower b = L`
+  -- and `upper b = U`.
+  val lu_nofill [n] : mat [n] -> mat [n]
+
+  -- | `lu_find_fills m` returns the block coordinates for fill-elements
+  -- required for LU decomposition.
+  val lu_find_fills [n] : mat [n] -> ?[k].[k](i64,i64)
+
+  -- | `lu a` returns a sparse blocked matrix representing an LU-decomposition
+  -- of `a`. The returned matrix `b` represents a lower triangular matrix L such
+  -- that `lower b = L` and `upper b = U`.
+  val lu [n] : mat [n] -> mat [n]
+
+  -- | `lower a` returns the strictly lower triangular part of `a` (i.e.,
+  -- excluding the diagonal elements in a). The result includes a 1 in all
+  -- diagonal elements.
+  val lower [n] : mat [n] -> mat [n]
+
+  -- | `upper a` returns the upper triangular part of `a`, including the
+  -- diagonal elements.
+  val upper [n] : mat [n] -> mat [n]
+
 }
 
 -- | Module for creating blocked square regular matrices. The module is
@@ -278,6 +299,23 @@ module blocked_square_regular (T: field) (X: {val bsz : i64})
        , blks = blks
        }
 
+  -- Find fill-elements for general sparse LU decomposition
+  def lu_find_fills [n] (m:mat[n]) : ?[k].[k](i64,i64) =
+    let nb = n / bsz
+    let rcs = map (idx_unflatten nb) m.idxs
+    let (_, acc) =
+      loop (rcs,acc) = (rcs,[]) for i < nb do
+      let rs = filter (\(r,c) -> r == i && c > i) rcs
+      let cs = filter (\(r,c) -> c == i && r > i) rcs
+      let fills = map (\(_,c) -> map (\(r,_) -> [(r,c)]) cs) rs
+		  |> flatten |> flatten
+      let newfills = setops.diff_by_key (idx_flatten nb) fills rcs
+      let rest = filter (\(r,c) -> r > i && c > i) rcs
+      let rest = rest++newfills
+      let acc = acc++newfills
+      in (rest,acc)
+    in acc
+
   -- Some tools
   def dotprod [n] (a: [n]T.t) (b: [n]T.t) : T.t =
     map2 (T.*) a b |> reduce (T.+) (T.i64 0)
@@ -298,11 +336,11 @@ module blocked_square_regular (T: field) (X: {val bsz : i64})
          let y[i] = copy (b[i] T.- sum)
          in y
 
-  module lu = mk_lu (T)
+  module lu_module = mk_lu (T)
 
   def matsub a b = linalg.matop (T.-) a b
 
-  def blu_nofill [n] (a: mat [n]) : mat [n] =
+  def lu_nofill [n] (a: mat [n]) : mat [n] =
     let [nz] a: {idxs: [nz]i64, blks: [nz][bsz][bsz]t, n: [n]()} = a
     let idxs = a.idxs
     let blks = a.blks
@@ -319,7 +357,7 @@ module blocked_square_regular (T: field) (X: {val bsz : i64})
       loop hrcbs for i < nb
       do let blks = filter (\(_, r, c, _) -> r >= i && c >= i) (copy hrcbs)
 	 let (h, r, c, b) = blks[0] -- h is the idx into hrcbs identifying the current diagonal block
-         let b = lu.lu 1 b
+         let b = lu_module.lu 1 b
   	 let () = assert (r == i && c == i) ()
          let A21 = filter (\(_, r, c, _) -> r > i && c == i) blks
          let A12 = filter (\(_, r, c, _) -> c > i && r == i) blks
@@ -353,6 +391,40 @@ module blocked_square_regular (T: field) (X: {val bsz : i64})
        , blks = blks
        }
 
-  def lu_dense [n] (a: [n][n]t) : [n][n]t =
-    lu.lu 2 a
+  def lu [n] (a:mat [n]) : mat [n] =
+    let fills = lu_find_fills a
+    let x = mk n (map (\(r,c) -> (r,c,tabulate_2d bsz bsz (\_ _ -> T.i64 0))) fills)
+    in lu_nofill (add a x)
+
+  def dense_strict_lower [n] (a:[n][n]t) =
+    tabulate_2d n n (\i j -> if i > j then a[i][j] else T.i64 0)
+
+  def dense_upper [n] (a:[n][n]t) =
+    tabulate_2d n n (\i j -> if i <= j then a[i][j] else T.i64 0)
+
+  def lower [n] (a:mat[n]) : mat[n] =
+    let nb = n / bsz
+    let (idxs,blks) =
+      map2 (\i b -> (i,b)) a.idxs a.blks
+      |> filter (\(i,_) -> let (r,c) = idx_unflatten nb i
+			   in r > c)
+      |> map (\(i,b) -> let (r,c) = idx_unflatten nb i
+			in if r == c then (i,dense_strict_lower b)
+			   else (i,b))
+      |> unzip
+    let b = {n=a.n, idxs, blks}
+    in add (eye n) b
+
+  def upper [n] (a:mat[n]) : mat[n] =
+    let nb = n / bsz
+    let (idxs,blks) =
+      map2 (\i b -> (i,b)) a.idxs a.blks
+      |> filter (\(i,_) -> let (r,c) = idx_unflatten nb i
+			   in r <= c)
+      |> map (\(i,b) -> let (r,c) = idx_unflatten nb i
+			in if r == c then (i,dense_upper b)
+			   else (i,b))
+      |> unzip
+    in {n=a.n, idxs, blks}
+
 }
