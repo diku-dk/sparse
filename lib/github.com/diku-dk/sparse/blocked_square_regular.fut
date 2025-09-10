@@ -111,7 +111,9 @@ module blocked_square_regular (T: field) (X: {val bsz : i64})
   module linalg = mk_linalg (T)
   def matmul = linalg.matmul
 
-  def ERROR_block_size_must_divide_n x = x  -- assertion message
+  -- Assertion error messages
+  def ERROR_block_size_must_divide_n x = x
+  def ERROR_diagonal_block_must_be_nonempty x = x
 
   type~ mat [n] =
     ?[nz].{ n: [n]()              -- nz is the number of non-zero blocks
@@ -130,12 +132,12 @@ module blocked_square_regular (T: field) (X: {val bsz : i64})
     }
 
   def mk [nz] (n: i64) (blks: [nz](i64, i64, [bsz][bsz]t)) : mat [n] =
-    let () = assert (ERROR_block_size_must_divide_n (n % bsz == 0)) ()
-    let nb = n / bsz
-    in { n = replicate n ()
-       , idxs = map (\(r, c, _) -> r * nb + c) blks
-       , blks = map (.2) blks
-       }
+    assert (ERROR_block_size_must_divide_n (n % bsz == 0))
+	   (let nb = n / bsz
+	    in { n = replicate n ()
+	       , idxs = map (\(r, c, _) -> r * nb + c) blks
+	       , blks = map (.2) blks
+	       })
 
   def blk_zero = tabulate_2d bsz bsz (\_ _ -> zero_t)
 
@@ -236,10 +238,10 @@ module blocked_square_regular (T: field) (X: {val bsz : i64})
     tabulate_2d n n (\c r -> if c == r then d[c] else zero_t)
 
   def diag [n] (d: [n]t) : mat [n] =
-    let () = assert (ERROR_block_size_must_divide_n (n % bsz == 0)) ()
-    in mk n (tabulate (n / bsz) (\i ->
-                                   let db = d[i * bsz:(i + 1) * bsz] :> [bsz]t
-                                   in (i, i, blk_diag db)))
+    assert (ERROR_block_size_must_divide_n (n % bsz == 0))
+	   (mk n (tabulate (n / bsz) (\i ->
+					let db = d[i * bsz:(i + 1) * bsz] :> [bsz]t
+					in (i, i, blk_diag db))))
 
   def blk_mvm [n] (a: [n][n]t) (v: [n]t) =
     map (\c -> map2 (T.*) v c |> reduce (T.+) zero_t) a
@@ -340,32 +342,46 @@ module blocked_square_regular (T: field) (X: {val bsz : i64})
 
   def matsub a b = linalg.matop (T.-) a b
 
+  -- lu_nofill. The algoritm divides `a` into a block matrix
+  --
+  -- |  b  A12 |
+  -- | A21  D  |
+  --
+  -- where `b` is one block (`bsz` x `bsz` elements) and A12 is a block row
+  -- (multiple blocks in a row) and A21 is a block column (multiple blocks in a
+  -- column). Notice that A12, A21, and D may be sparse. After performing a
+  -- dense LU-decomposition of `b`, and thereby obtaining lu(b) = b', the
+  -- algorithm uses forwards- and backwards-solving for computing X12 and X21,
+  -- respectively. It then calculates the Schur-complement, which is subtracted
+  -- from D, reaching D'', before repeating the process of LU-decomposition of
+  -- D'', reaching X. Finally, the results are collected to reach
+  --
+  -- | b'  X12 |
+  -- | X21  X  |
+  --
+
   def lu_nofill [n] (a: mat [n]) : mat [n] =
-    let [nz] a: {idxs: [nz]i64, blks: [nz][bsz][bsz]t, n: [n]()} = a
-    let idxs = a.idxs
-    let blks = a.blks
-    let nb = n / bsz
-    -- number of blocks in each dimension
+    let nb = n / bsz  -- number of blocks in each dimension
     let hrcbs =
       map3 (\h i b ->
               let (r, c) = idx_unflatten nb i
               in (h, r, c, b))
-           (iota nz)
-           idxs
-           blks
+           (indices a.idxs)
+           a.idxs
+           a.blks
     let hrcbs =
       loop hrcbs for i < nb
-      do let blks = filter (\(_, r, c, _) -> r >= i && c >= i) (copy hrcbs)
+      do let blks = filter (\(_, r, c, _) -> r >= i && c >= i) hrcbs
 	 let (h, r, c, b) = blks[0] -- h is the idx into hrcbs identifying the current diagonal block
-         let b = lu_module.lu 1 b
-  	 let () = assert (r == i && c == i) ()
+  	 let b = assert (ERROR_diagonal_block_must_be_nonempty(r == i && c == i))
+			(lu_module.lu 1 b)
          let A21 = filter (\(_, r, c, _) -> r > i && c == i) blks
          let A12 = filter (\(_, r, c, _) -> c > i && r == i) blks
          let X21 = map (\(h, r, _, a) ->
 			  (h, r, map (\aa -> backsolve' aa b) a)
 		       ) A21
          let X12 = map (\(h, _, c, a) ->
-			  (h, c, transpose (map (\aa -> forsolve b aa) (transpose a)))
+			  (h, c, transpose (map (forsolve b) (transpose a)))
 		       ) A12
          let hrcbs[h] = (h, r, c, b)
          let hrcbs = scatter hrcbs (map (.0) X21) (map (\(h, r, b) -> (h, r, c, b)) X21)
@@ -385,10 +401,9 @@ module blocked_square_regular (T: field) (X: {val bsz : i64})
 	   |> map (\((h, _, r, c, b), (_, _, _, b')) -> (h, r, c, matsub b b'))
          let hrcbs = scatter hrcbs (map (.0) D'') D''
          in hrcbs
-    let blks = map (.3) hrcbs
     in { n = a.n
-       , idxs = idxs
-       , blks = blks
+       , idxs = a.idxs
+       , blks = map (.3) hrcbs
        }
 
   def lu [n] (a:mat [n]) : mat [n] =
