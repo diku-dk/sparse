@@ -3,7 +3,7 @@
 import "../sorts/radix_sort"
 import "../segmented/segmented"
 import "../linalg/linalg"
-import "../linalg/lu"
+import "../linalg/lup"
 import "../containers/setops"
 
 local
@@ -15,8 +15,29 @@ local
 -- from client code.  This limitation makes it possible for the interface to be
 -- enriched by new members in future minor versions.
 module type blocked_square_regular = {
+
+  -- | Type of elements.
   type t
+
+  -- | Type of square matrices of size `n` x `n`.
   type~ mat [n]
+
+  -- | Type of permutations.
+  type perm [n]
+
+  -- | Perform a permutation of a vector given a permutation.
+  val permute 'a [m] : perm[m] -> *[m]a -> *[m]a
+
+  -- | Perform an inverse permutation of a vector given a permutation. We have
+  -- `permute_inv p (permute p v) = v` for any permutation `p` of length `m` and
+  -- vector `v` of length `m`.
+  val permute_inv 'a [m] : perm[m] -> *[m]a -> *[m]a
+
+  -- | Add two permutations.
+  val permute_add [m][n] : perm[m] -> perm[n] -> perm[m+n]
+
+  -- | The empty permutation.
+  val permute_emp : perm[0]
 
   -- | `bsz` is the blocksize of blocks in each of the two dimensions.
   val bsz : i64
@@ -66,19 +87,28 @@ module type blocked_square_regular = {
   -- the sparse matrix `a` with the sparse matrix `b`.
   val smsmm [n] : mat [n] -> mat [n] -> mat [n]
 
-  -- | `lu_nofill a` returns a sparse blocked matrix representing an
+  -- | `lup_nofill a` returns a sparse blocked matrix representing an
   -- LU-decomposition of `a`, assuming no fill-ins will occur. The returned
   -- matrix `b` represents a lower triangular matrix L such that `lower b = L`
   -- and `upper b = U`.
-  val lu_nofill [n] : mat [n] -> mat [n]
+  val lup_nofill [n] : mat [n] -> (mat [n], perm [n])
 
   -- | `lu_find_fills m` returns the block coordinates for fill-elements
   -- required for LU decomposition.
   val lu_find_fills [n] : mat [n] -> ?[k].[k](i64,i64)
 
-  -- | `lu a` returns a sparse blocked matrix representing an LU-decomposition
-  -- of `a`. The returned matrix `b` represents a lower triangular matrix L such
-  -- that `lower b = L` and `upper b = U`.
+  -- | `lup a` returns a pair `(b, p)` of a sparse blocked matrix `b`
+  -- representing an LU-decomposition of `a` and a permutation `p` representing
+  -- the row-permutations performed by the block-limited partial (row)
+  -- pivoting. The returned matrix `b` represents a lower triangular matrix `L`
+  -- and an upper triangular matrix `U` such that `lower b = L` and `upper b =
+  -- U`. The intension is that `permute p (dense a) = dense(smsmm (lower b)
+  -- (upper b))`. See below for more information about `lower` and `upper`. The
+  -- partial pivoting is limited to be performed within a block.
+  val lup [n] : mat [n] -> (mat [n], perm [n])
+
+  -- | `lu a` returns a parse blocked matrix `b` representing an
+  -- LU-decomposition of `a`. As `lup a` but without pivoting.
   val lu [n] : mat [n] -> mat [n]
 
   -- | `lower a` returns the strictly lower triangular part of `a` (i.e.,
@@ -89,13 +119,12 @@ module type blocked_square_regular = {
   -- | `upper a` returns the upper triangular part of `a`, including the
   -- diagonal elements.
   val upper [n] : mat [n] -> mat [n]
-
 }
 
 -- | Parameterised module for creating blocked square regular matrices. The
 -- module is parameterised by a field (defined in the `linalg` package) and a
 -- block size (`bsz`).
-module blocked_square_regular (T: field) (X: {val bsz : i64})
+module blocked_square_regular (T: ordered_field) (X: {val bsz : i64})
   : blocked_square_regular with t = T.t = {
   type t = T.t
   def bsz = X.bsz
@@ -110,6 +139,13 @@ module blocked_square_regular (T: field) (X: {val bsz : i64})
 
   module linalg = mk_linalg (T)
   def matmul = linalg.matmul
+
+  module lup_mod = mk_lup (T)
+  type perm [n] = lup_mod.perm [n]
+  let permute = lup_mod.permute
+  let permute_inv = lup_mod.permute_inv
+  let permute_add = lup_mod.permute_add
+  let permute_emp = lup_mod.permute_emp
 
   -- Assertion error messages
   def ERROR_block_size_must_divide_n x = x
@@ -319,28 +355,18 @@ module blocked_square_regular (T: field) (X: {val bsz : i64})
     in acc
 
   -- Some tools
-  def dotprod [n] (a: [n]T.t) (b: [n]T.t) : T.t =
-    map2 (T.*) a b |> reduce (T.+) (T.i64 0)
+  def matsub a b = linalg.matop (T.-) a b
+  def dotprod a b = linalg.dotprod a b
 
-  -- Solve (xU = y, x), where x and y are vectors and U is an upper-triangular square matrix
-  def backsolve' [n] (y: [n]t) (U: [n][n]t) : [n]t =
+  -- Solve (xU = y, x), where x and y are vectors and U is an upper-triangular
+  -- square matrix. Notice x is on the left of U. Reads only upper part of U,
+  -- including diagonal elements.
+  def backsolve' [n] (U: [n][n]t) (y: [n]t) : [n]t =
     let x: *[n]t = replicate n (T.i64 0)
     in loop x for i in 0..<n do
          let sum = dotprod x[:i] U[:i, i]
          let x[i] = copy (y[i] T.- sum) T./ U[i, i]
          in x
-
-  -- Solve (Lx = b, x), where x and b are vectors and L is a lower-triangular matrix
-  def forsolve [n] (L: [n][n]t) (b: [n]t) : [n]t =  -- reads only lower triangular entries in L
-    let y: *[n]t = replicate n (T.i64 0)
-    in loop y for i in 0..<n do
-         let sum = dotprod L[i, :i] y[:i]
-         let y[i] = copy (b[i] T.- sum)
-         in y
-
-  module lu_module = mk_lu (T)
-
-  def matsub a b = linalg.matop (T.-) a b
 
   -- lu_nofill. The algoritm divides `a` into a block matrix
   --
@@ -360,6 +386,93 @@ module blocked_square_regular (T: field) (X: {val bsz : i64})
   -- | X21  X  |
   --
 
+  def lup_nofill [n] (a: mat [n]) : (mat [n], perm [n]) =
+    let nb = n / bsz  -- number of blocks in each dimension
+    let hrcbs =
+      map3 (\h i b ->
+              let (r, c) = idx_unflatten nb i
+              in (h, r, c, b))
+           (indices a.idxs)
+           a.idxs
+           a.blks
+    let (hrcbs, p) =
+      loop (hrcbs,p0) = (hrcbs,lup_mod.permute_emp) for i < nb
+      do
+         let p0 : perm[i*bsz] = p0 :> perm[i*bsz]
+         let blks = filter (\(_, r, c, _) -> r >= i && c >= i) hrcbs
+	 let (h, r, c, b) = blks[0] -- h is the idx into hrcbs identifying the current diagonal block
+  	 let (b,p:perm[bsz]) = assert (ERROR_diagonal_block_must_be_nonempty(r == i && c == i))
+				      (lup_mod.lup (copy b))
+         let A21 = filter (\(_, r, c, _) -> r > i && c == i) blks
+         let A12 = filter (\(_, r, c, _) -> c > i && r == i) blks
+         let X21 = map (\(h, r, _, a) ->
+			  (h, r, map (backsolve' b) a)
+		       ) A21
+         let X12 = map (\(h, _, c, a) ->
+			  (h, c, transpose (map (\a -> lup_mod.forsolve b (permute_inv p (copy a))) (transpose a)))
+		       ) A12
+         let hrcbs[h] = (h, r, c, b)
+         let hrcbs = scatter hrcbs (map (.0) X21) (map (\(h, r, b) -> (h, r, c, b)) X21)
+         let hrcbs = scatter hrcbs (map (.0) X12) (map (\(h, c, b) -> (h, r, c, b)) X12)
+         let D' =
+           map (\(_, r, A) ->
+                  map (\(_, c, B) ->
+                         (idx_flatten nb (r, c), r, c, matmul A B))
+                      X12)
+               X21
+           |> flatten
+         let D =
+           filter (\(_, r, c, _) -> r > i && c > i) blks
+           |> map (\(h, r, c, b) -> (h, idx_flatten nb (r, c), r, c, b))
+         let D'' =
+           setops.join_by_key (.1) (.0) D D' -- ignore fillins
+	   |> map (\((h, _, r, c, b), (_, _, _, b')) -> (h, r, c, matsub b b'))
+         let hrcbs = scatter hrcbs (map (.0) D'') D''
+	 -- permute lower blocks of block row i
+	 let bs = filter (\(_,r,c,_) -> r == i && c < i) hrcbs
+	 let hrcbs = scatter hrcbs (map (.0) bs) (map (\(h,r,c,b) -> (h,r,c,lup_mod.permute p (copy b))) bs)
+         in (hrcbs, lup_mod.permute_add p0 p)
+    in ({ n = a.n
+	, idxs = a.idxs
+	, blks = map (.3) hrcbs
+        }, p :> perm[n])
+
+  def lup [n] (a:mat [n]) : (mat[n], perm[n]) =
+    let fills = lu_find_fills a
+    let x = mk n (map (\(r,c) -> (r,c,tabulate_2d bsz bsz (\_ _ -> T.i64 0))) fills)
+    in lup_nofill (add a x)
+
+  def dense_strict_lower [n] (a:[n][n]t) =
+    tabulate_2d n n (\i j -> if i > j then a[i][j] else T.i64 0)
+
+  def dense_upper [n] (a:[n][n]t) =
+    tabulate_2d n n (\i j -> if i <= j then a[i][j] else T.i64 0)
+
+  def lower [n] (a:mat[n]) : mat[n] =
+    let nb = n / bsz
+    let (idxs,blks) =
+      map2 (\i b -> (i,b)) a.idxs a.blks
+      |> filter (\(i,_) -> let (r,c) = idx_unflatten nb i
+			   in r >= c)
+      |> map (\(i,b) -> let (r,c) = idx_unflatten nb i
+			in if r == c then (i,dense_strict_lower b)
+			   else (i,b))
+      |> unzip
+    let b = {n=a.n, idxs, blks}
+    in add (eye n) b
+
+  def upper [n] (a:mat[n]) : mat[n] =
+    let nb = n / bsz
+    let (idxs,blks) =
+      map2 (\i b -> (i,b)) a.idxs a.blks
+      |> filter (\(i,_) -> let (r,c) = idx_unflatten nb i
+			   in r <= c)
+      |> map (\(i,b) -> let (r,c) = idx_unflatten nb i
+			in if r == c then (i,dense_upper b)
+			   else (i,b))
+      |> unzip
+    in {n=a.n, idxs, blks}
+
   def lu_nofill [n] (a: mat [n]) : mat [n] =
     let nb = n / bsz  -- number of blocks in each dimension
     let hrcbs =
@@ -370,18 +483,18 @@ module blocked_square_regular (T: field) (X: {val bsz : i64})
            a.idxs
            a.blks
     let hrcbs =
-      loop hrcbs for i < nb
+      loop hrcbs = hrcbs for i < nb
       do let blks = filter (\(_, r, c, _) -> r >= i && c >= i) hrcbs
 	 let (h, r, c, b) = blks[0] -- h is the idx into hrcbs identifying the current diagonal block
   	 let b = assert (ERROR_diagonal_block_must_be_nonempty(r == i && c == i))
-			(lu_module.lu 1 b)
+			(lup_mod.lu (copy b))
          let A21 = filter (\(_, r, c, _) -> r > i && c == i) blks
          let A12 = filter (\(_, r, c, _) -> c > i && r == i) blks
          let X21 = map (\(h, r, _, a) ->
-			  (h, r, map (\aa -> backsolve' aa b) a)
+			  (h, r, map (backsolve' b) a)
 		       ) A21
          let X12 = map (\(h, _, c, a) ->
-			  (h, c, transpose (map (forsolve b) (transpose a)))
+			  (h, c, transpose (map (lup_mod.forsolve b) (transpose a)))
 		       ) A12
          let hrcbs[h] = (h, r, c, b)
          let hrcbs = scatter hrcbs (map (.0) X21) (map (\(h, r, b) -> (h, r, c, b)) X21)
@@ -406,40 +519,9 @@ module blocked_square_regular (T: field) (X: {val bsz : i64})
        , blks = map (.3) hrcbs
        }
 
-  def lu [n] (a:mat [n]) : mat [n] =
+  def lu [n] (a:mat [n]) : mat[n] =
     let fills = lu_find_fills a
     let x = mk n (map (\(r,c) -> (r,c,tabulate_2d bsz bsz (\_ _ -> T.i64 0))) fills)
     in lu_nofill (add a x)
-
-  def dense_strict_lower [n] (a:[n][n]t) =
-    tabulate_2d n n (\i j -> if i > j then a[i][j] else T.i64 0)
-
-  def dense_upper [n] (a:[n][n]t) =
-    tabulate_2d n n (\i j -> if i <= j then a[i][j] else T.i64 0)
-
-  def lower [n] (a:mat[n]) : mat[n] =
-    let nb = n / bsz
-    let (idxs,blks) =
-      map2 (\i b -> (i,b)) a.idxs a.blks
-      |> filter (\(i,_) -> let (r,c) = idx_unflatten nb i
-			   in r > c)
-      |> map (\(i,b) -> let (r,c) = idx_unflatten nb i
-			in if r == c then (i,dense_strict_lower b)
-			   else (i,b))
-      |> unzip
-    let b = {n=a.n, idxs, blks}
-    in add (eye n) b
-
-  def upper [n] (a:mat[n]) : mat[n] =
-    let nb = n / bsz
-    let (idxs,blks) =
-      map2 (\i b -> (i,b)) a.idxs a.blks
-      |> filter (\(i,_) -> let (r,c) = idx_unflatten nb i
-			   in r <= c)
-      |> map (\(i,b) -> let (r,c) = idx_unflatten nb i
-			in if r == c then (i,dense_upper b)
-			   else (i,b))
-      |> unzip
-    in {n=a.n, idxs, blks}
 
 }
