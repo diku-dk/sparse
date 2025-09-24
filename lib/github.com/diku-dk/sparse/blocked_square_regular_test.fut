@@ -2,17 +2,26 @@
 
 import "blocked_square_regular"
 import "../linalg/linalg"
-import "../linalg/lu"
+import "../linalg/lup"
 
 module mat = blocked_square_regular f64 { def bsz=2i64 }
 module linalg = mk_linalg f64
-module lu_module = mk_lu f64
+module lup64 = mk_lup f64
 
 def eqv [n] (x:[n]f64) (y:[n]f64) =
   map2 (f64.==) x y |> reduce (&&) true
 
+def eqv_eps [n] (eps:f64) (x:[n]f64) (y:[n]f64) =
+  map2 (\a b -> f64.abs(a-b) < eps) x y |> reduce (&&) true
+
+def eqvi [n] (x:[n]i64) (y:[n]i64) =
+  map2 (i64.==) x y |> reduce (&&) true
+
 def eq [n] (a:[n][n]f64) (b:[n][n]f64) =
   map2 eqv a b |> reduce (&&) true
+
+def eq_eps [n] (eps:f64) (a:[n][n]f64) (b:[n][n]f64) =
+  map2 (eqv_eps eps) a b |> reduce (&&) true
 
 def lower_dense [n] 'a (z:a) (one:a)  (x:[n][n]a) : [n][n]a =
   tabulate_2d n n (\r c -> if r==c then one else if r > c then x[r][c] else z)
@@ -37,9 +46,10 @@ entry test_simple (_e:i64) : bool =
 --  let b' = matmul (lower_dense z one b) (upper_dense z b)
   let a = mk 4 [(0,0,[[1,2],[3,4]]:>[bsz][bsz]t),
 		(1,1,[[1,2],[3,4]]:>[bsz][bsz]t)]
-  let x = dense (lu_nofill a)
+  let (lu,p) = lup_nofill a
+  let x = dense lu
   let x' = matmul (lower_dense z one x) (upper_dense z x)
-  in eq (dense a) x' && dim a == 4
+  in eq (permute p (dense (copy a))) x' && dim a == 4
 
 -- ==
 -- entry: test_eye
@@ -179,16 +189,39 @@ def g6() : mat [6] =
   let b22 = d[4:6,4:6] :> [bsz][bsz]f64
   in mk 6 [(0,0,b00),(0,1,b01),(1,1,b11),(2,0,b20),(2,1,b21),(2,2,b22)]
 
+entry test_solve_full : [4]t =
+  let a00 = [[3.0,-7],[-3.0,5]] :> [bsz][bsz]t
+  let a01 = [[-2.0,2],[1.0,0]] :> [bsz][bsz]t
+  let a10 = [[6.0,-4],[-9.0,5]] :> [bsz][bsz]t
+  let a11 = [[0.0,-5],[-5.0,12]] :> [bsz][bsz]t
+  let a = mk 4 [ (0,0,a00), (0,1,a01), (1,0,a10), (1,1,a11)]
+  let b = [-9.0,5,7,11]
+  let (lu,p) = lup a
+  let dlu = dense lu
+  let pb = permute p b
+  let y = lup64.forsolve dlu pb
+  let x = lup64.backsolve dlu y
+  in x
+
 -- ==
--- entry: test_lu_nofill
--- input { 2i64 } output { true }
--- input { 4i64 } output { true }
--- input { 6i64 } output { true }
-entry test_lu_nofill (n:i64) : bool =
-  let m : mat [n] = (if n == 4 then g4()
-		     else if n == 6 then g6()
-		     else g2()) :> mat [n]
-  in eq (dense (lu_nofill m)) (lu_module.lu 2 (dense m))
+-- entry: test_solve_full
+-- input { } output { [3.0,4,-6,-1] }
+
+entry test_solve_dense4 : [4]t =
+  let a = [[3.0,-7,-2,2],
+	   [-3.0,5,1,0],
+	   [6.0,-4,0,-5],
+	   [-9.0,5,-5,12]]
+  let b = [-9.0,5,7,11]
+  let (lu,p) = lup64.lup a
+  let pb = lup64.permute p b
+  let y = lup64.forsolve lu pb
+  let x = lup64.backsolve lu y
+  in x
+
+-- ==
+-- entry: test_solve_dense4
+-- input { } output { [3.0,4,-6,-1] }
 
 def g14 () : mat [14] =
   let d = diag (map f64.i64 (iota 14))
@@ -196,6 +229,77 @@ def g14 () : mat [14] =
   let u = mk 14 [(0,2,b),(0,5,b),(1,3,b),(0,6,b)]
   let l = mk 14 [(3,1,b),(4,0,b),(5,1,b)]
   in add d (add u l)
+
+def mk_blkdiag (n:i64) : mat[n*bsz] =
+  let f i a = f64.sqrt (f64.i64 (i+1)) + (f64.i64 (a+i) |> f64.sin |> (*28.0))
+  let diag_blks = map (\i -> (i,i,unflatten (map (f i) (iota (bsz*bsz))))) (iota n)
+  in mk (n*bsz) diag_blks
+
+def solve_sparse (n:i64) : [n*bsz][n*bsz]t =
+  let m = mk_blkdiag n
+  let (lu,_p) = lup (copy m)
+  let L = lower lu
+  in dense L
+--  let U = upper lu
+--   let LU = smsmm L U
+--   let LU_dense = dense LU
+--   let m_dense = dense m
+--   in eq (permute p m_dense) LU_dense
+
+entry test_solve_sparse (n:i64) : bool =
+  let m = mk_blkdiag n
+  let m_dense = copy(dense m)
+  let (lu,p) = lup m
+  let L = lower lu
+  let U = upper lu
+  let LU = smsmm L U
+  let LU_dense = dense LU
+  in eq_eps 0.00006 (permute p m_dense) LU_dense
+
+-- ==
+-- entry: test_solve_sparse
+-- input { 3i64 } output { true }
+-- input { 4i64 } output { true }
+-- input { 5i64 } output { true }
+-- input { 8i64 } output { true }
+
+entry test_solve_sparse2 (n:i64) : bool =
+  let m1 = mk_blkdiag n
+  let m2 = transp (mk_blkdiag n)
+  let m = add m1 m2
+  let m_dense = copy(dense m)
+  let (lu,p) = lup m
+  let L = lower lu
+  let U = upper lu
+  let LU = smsmm L U
+  let LU_dense = dense LU
+  in eq_eps 0.00006 (permute p m_dense) LU_dense
+
+-- ==
+-- entry: test_solve_sparse2
+-- input { 3i64 } output { true }
+-- input { 4i64 } output { true }
+-- input { 5i64 } output { true }
+-- input { 8i64 } output { true }
+
+entry test_solve_sparse2nopiv (n:i64) : bool =
+  let m1 = mk_blkdiag n
+  let m2 = transp (mk_blkdiag n)
+  let m = add m1 m2
+  let m_dense = copy(dense m)
+  let lu' = lu m
+  let L = lower lu'
+  let U = upper lu'
+  let LU = smsmm L U
+  let LU_dense = dense LU
+  in eq_eps 0.00006 m_dense LU_dense
+
+-- ==
+-- entry: test_solve_sparse2nopiv
+-- input { 3i64 } output { true }
+-- input { 4i64 } output { true }
+-- input { 5i64 } output { true }
+-- input { 8i64 } output { true }
 
 -- ==
 -- entry: test_lu_find_fills

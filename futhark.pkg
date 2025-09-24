@@ -4,5 +4,5 @@ require {
   github.com/diku-dk/segmented 0.4.4 #9653ba17581771f0641d1f3f9618da6d9bc633de
   github.com/diku-dk/sorts 0.6.0 #f448cd990c86c566715915a8fc4182c8c2ff5400
   github.com/diku-dk/containers 0.8.1 #53d5c4fbb0427cc7ba8f85de6de7d11104c0809f
-  github.com/diku-dk/linalg 0.6.1 #f4536155a22b2e1912bc8e168d422dba83eac5f2
+  github.com/diku-dk/linalg 0.6.3 #79c98bb77d8d934436da3aac61b1b30c6b18044f
 }
