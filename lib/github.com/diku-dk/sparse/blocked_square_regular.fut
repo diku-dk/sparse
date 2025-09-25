@@ -565,7 +565,7 @@ module blocked_square_regular (T: ordered_field) (X: {val bsz : i64})
 	     let sums = map (\(_,r,c,b) ->
 			       let bound = if c == r then j else bsz
 			       let bslice = b[j,:bound]
-			       let yslice = y[k*bsz:k*bsz+bound] :> [bound]t
+			       let yslice = y[c*bsz:c*bsz+bound] :> [bound]t
 			       in dotprod bslice yslice) bs   --  dotprod L[i,:i] y[:i]
 	     let sum = reduce (T.+) (T.i64 0) sums
 	     let y[i] = copy(b[i] T.- sum)
@@ -589,7 +589,7 @@ module blocked_square_regular (T: ordered_field) (X: {val bsz : i64})
 	     let sums = map (\(_,r,c,b) ->
 			       let bound = if c == r then j+1 else 0
 			       let bslice = b[j,bound:]
-			       let xslice = x[k*bsz+bound:(k+1)*bsz] :> [bsz-bound]t
+			       let xslice = x[c*bsz+bound:(c+1)*bsz] :> [bsz-bound]t
 			       in dotprod bslice xslice) bs   -- dotprod U[i,i+1:] x[i+1:]
 	     let sum = reduce (T.+) zero_t sums
 	     let ejj = diagblk[j][j]

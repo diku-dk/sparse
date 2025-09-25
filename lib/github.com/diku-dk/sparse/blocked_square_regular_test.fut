@@ -236,17 +236,6 @@ def mk_blkdiag (n:i64) : mat[n*bsz] =
   let diag_blks = map (\i -> (i,i,unflatten (map (f i) (iota (bsz*bsz))))) (iota n)
   in mk (n*bsz) diag_blks
 
-def solve_sparse (n:i64) : [n*bsz][n*bsz]t =
-  let m = mk_blkdiag n
-  let (lu,_p) = lup (copy m)
-  let L = lower lu
-  in dense L
---  let U = upper lu
---   let LU = smsmm L U
---   let LU_dense = dense LU
---   let m_dense = dense m
---   in eq (perm.permute p m_dense) LU_dense
-
 entry test_solve_sparse (n:i64) : bool =
   let m = mk_blkdiag n
   let blk = [[3.0,2],[7.0,-1]] :> [bsz][bsz]t
@@ -293,9 +282,9 @@ entry test_ols (n:i64) : bool =
   let m1 = mk_blkdiag n
   let m2 = transp (mk_blkdiag n)
   let m = add m1 m2
---  let blk = [[3.0,2],[7.0,-1]] :> [bsz][bsz]t
---  let m = if n >= 5 then add m (mk (n*bsz) [(3,4,blk)])
---          else m
+  let blk = [[3.0,2],[7.0,-1]] :> [bsz][bsz]t
+  let m = if n >= 5 then add m (mk (n*bsz) [(3,4,blk)])
+          else m
   let b = map (\i -> f64.i64(i+2)) (iota (n*bsz))
   let x = ols m b
   let b' = smvm m x
