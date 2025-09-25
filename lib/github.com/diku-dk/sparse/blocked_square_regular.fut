@@ -1,19 +1,22 @@
--- | Blocked square regular matrices
+-- | Blocked square regular matrices. Blocked square regular matrices are
+-- represented as a sequence of identically-sized square dense blocks. The
+-- structure is sparse meaning that blocks that are known to consist only of
+-- zeros need not be represented. Matrices are required to be a multiple of the
+-- block size in each dimension.
 
 import "../sorts/radix_sort"
 import "../segmented/segmented"
 import "../linalg/linalg"
 import "../linalg/lup"
+import "../linalg/perm"
 import "../containers/setops"
 
 local
--- | The `blocked_square_regular` module type. Blocked square regular matrices
--- are represented as a sequence of identically-sized square dense blocks. The
--- structure is sparse meaning that blocks that are known to consist only of
--- zeros need not be represented.  The module type `blocked_square_regular` is
--- declared `local`, which means that it may not be referenced directly by name
--- from client code.  This limitation makes it possible for the interface to be
--- enriched by new members in future minor versions.
+-- | The `blocked_square_regular` module type. The module type
+-- `blocked_square_regular` is declared `local`, which means that it may not be
+-- referenced directly by name from client code.  This limitation makes it
+-- possible for the interface to be enriched by new members in future minor
+-- versions.
 module type blocked_square_regular = {
 
   -- | Type of elements.
@@ -22,103 +25,129 @@ module type blocked_square_regular = {
   -- | Type of square matrices of size `n` x `n`.
   type~ mat [n]
 
-  -- | Type of permutations.
-  type perm [n]
-
-  -- | Perform a permutation of a vector given a permutation.
-  val permute 'a [m] : perm[m] -> *[m]a -> *[m]a
-
-  -- | Perform an inverse permutation of a vector given a permutation. We have
-  -- `permute_inv p (permute p v) = v` for any permutation `p` of length `m` and
-  -- vector `v` of length `m`.
-  val permute_inv 'a [m] : perm[m] -> *[m]a -> *[m]a
-
-  -- | Add two permutations.
-  val permute_add [m][n] : perm[m] -> perm[n] -> perm[m+n]
-
-  -- | The empty permutation.
-  val permute_emp : perm[0]
-
-  -- | `bsz` is the blocksize of blocks in each of the two dimensions.
+  -- | The entry `bsz` is the block size of blocks in each of the two
+  -- dimensions.
   val bsz : i64
 
-  -- | `dim a` returns `n` when `a : mat[n]`.
+  -- | The size of each dimension. The expression `dim a` returns `n` when `a :
+  -- mat[n]`.
   val dim [n] : mat [n] -> i64
 
-  -- | `zero n` returns the zero-matrix of dimension `n` x `n`. Here `n` must be
-  -- a multiple of `bsz`.
+  -- | The zero-matrix. The expression `zero n` returns the zero-matrix of
+  -- dimension `n` x `n`. Here `n` must be a multiple of `bsz`.
   val zero : (n: i64) -> mat [n]
 
-  -- | `mk n bs` returns a blocked matrix of dimension `n` x `n` with blocks
-  -- specified by `bs`. Here `n` must be a multiple of `bsz`.
+  -- | Matrix construction. The expression `mk n bs` returns a blocked matrix of
+  -- dimension `n` x `n` with blocks specified by `bs`. Here `n` must be a
+  -- multiple of `bsz`.
   val mk [nz] : (n: i64) -> [nz](i64, i64, [bsz][bsz]t) -> mat [n]
 
-  -- | `eye n` returns the identity matrix of dimension `n` x `n`. Here `n` must
-  -- be a multiple of `bsz`.
+  -- | The identity matrix. The expression `eye n` returns the identity matrix
+  -- of dimension `n` x `n`. Here `n` must be a multiple of `bsz`.
   val eye : (n: i64) -> mat [n]
 
-  -- | `transp a` returns `a` transposed.
+  -- | Transposition. The expression `transp a` returns `a` transposed.
   val transp [n] : mat [n] -> mat [n]
 
-  -- | `dense a` returns a dense version of the blocked matrix `a`.
+  -- | Conversion to a dense matrix. The expression `dense a` returns a dense
+  -- version of the blocked matrix `a`.
   val dense [n] : mat [n] -> [n][n]t
 
-  -- | `add a b` returns the result of adding `a` and `b`, element-wise.
+  -- | Element-wise addition. The expression `add a b` returns the result of
+  -- adding `a` and `b`, element-wise.
   val add [n] : mat [n] -> mat [n] -> mat [n]
 
-  -- | `sub a b` returns the result of subtracting `b` from `a`, element-wise.
+  -- | Element-wise subtraction. The expression `sub a b` returns the result of
+  -- subtracting `b` from `a`, element-wise.
   val sub [n] : mat [n] -> mat [n] -> mat [n]
 
-  -- | `mul a b` returns the result of multiplying `a` and `b`, element-wise.
+  -- | Element-wise multiplication. The expression `mul a b` returns the result
+  -- of multiplying `a` and `b`, element-wise.
   val mul [n] : mat [n] -> mat [n] -> mat [n]
 
-  -- | `scale s a` returns matrix `a` with all elements scaled by `s`.
+  -- | Scaling. The expression `scale s a` returns matrix `a` with all elements
+  -- scaled by `s`.
   val scale [n] : t -> mat [n] -> mat [n]
 
-  -- | `diag v` returns a diagonal matrix with dimension `n` x `n` with diagonal
-  -- elements from `v`.
+  -- | Construction of a diagonal matrix. The expression `diag v` returns a
+  -- diagonal matrix of dimension `n` x `n` with diagonal elements taken from
+  -- `v`.
   val diag [n] : [n]t -> mat [n]
 
-  -- | `smvm a v` returns the vector resulting from multiplying the sparse
-  -- matrix `a` with the dense vector `v`.
+  -- | Matrix-vector multiplication. The expression `smvm a v` returns the
+  -- vector resulting from multiplying the sparse matrix `a` with the dense
+  -- vector `v`.
   val smvm [n] : mat [n] -> [n]t -> [n]t
 
-  -- | `smsmm a b` returns the sparse blocked matrix resulting from multiplying
-  -- the sparse matrix `a` with the sparse matrix `b`.
+  -- | Matrix-matrix multiplication. The expression `smsmm a b` returns the
+  -- sparse blocked matrix resulting from multiplying the sparse matrix `a` with
+  -- the sparse matrix `b`.
   val smsmm [n] : mat [n] -> mat [n] -> mat [n]
 
-  -- | `lup_nofill a` returns a sparse blocked matrix representing an
-  -- LU-decomposition of `a`, assuming no fill-ins will occur. The returned
-  -- matrix `b` represents a lower triangular matrix L such that `lower b = L`
-  -- and `upper b = U`.
-  val lup_nofill [n] : mat [n] -> (mat [n], perm [n])
+  -- | LU-decomposition with block-partial (row) pivoting but without
+  -- fill-ins. The expression `lup_nofill a` returns a pair `(LU,p)` of a sparse
+  -- blocked matrix `LU` representing an LU-decomposition of `permute p a`,
+  -- assuming no fill-ins will occur. The returned matrix `LU` embeds a lower
+  -- triangular matrix L such that `lower LU = L` and an upper triangular matrix
+  -- `U` such that `upper LU = U`. The intention is that `permute p (dense a) =
+  -- dense(smsmm (lower b) (upper b))`. See below for more information about
+  -- `lower` and `upper`. The partial pivoting is limited to be performed within
+  -- a block.
+  val lup_nofill [n] : mat [n] -> (mat [n], perm.t [n])
 
-  -- | `lu_find_fills m` returns the block coordinates for fill-elements
-  -- required for LU decomposition.
+  -- | Fill-in computation. The expression `lu_find_fills m` returns the block
+  -- coordinates for fill-elements required for LU decomposition.
   val lu_find_fills [n] : mat [n] -> ?[k].[k](i64,i64)
 
-  -- | `lup a` returns a pair `(b, p)` of a sparse blocked matrix `b`
-  -- representing an LU-decomposition of `a` and a permutation `p` representing
-  -- the row-permutations performed by the block-limited partial (row)
-  -- pivoting. The returned matrix `b` represents a lower triangular matrix `L`
-  -- and an upper triangular matrix `U` such that `lower b = L` and `upper b =
-  -- U`. The intension is that `permute p (dense a) = dense(smsmm (lower b)
-  -- (upper b))`. See below for more information about `lower` and `upper`. The
-  -- partial pivoting is limited to be performed within a block.
-  val lup [n] : mat [n] -> (mat [n], perm [n])
+  -- | LU-decomposition with block-partial (row) pivoting. The expression `lup
+  -- a` returns a pair `(LU, p)` of a sparse blocked matrix `LU` representing an
+  -- LU-decomposition of `permute p a` and a permutation `p` representing the
+  -- row-permutations performed by the block-limited partial (row) pivoting. The
+  -- returned matrix `LU` embeds a lower triangular matrix `L` and an upper
+  -- triangular matrix `U` such that `lower LU = L` and `upper LU = U`. The
+  -- intention is that `permute p (dense a) = dense(smsmm (lower b) (upper
+  -- b))`. See below for more information about `lower` and `upper`. The partial
+  -- pivoting is limited to be performed within a block.
+  val lup [n] : mat [n] -> (mat [n], perm.t [n])
 
-  -- | `lu a` returns a parse blocked matrix `b` representing an
-  -- LU-decomposition of `a`. As `lup a` but without pivoting.
+  -- | LU-decomposition without pivoting. The expression `lu a` returns a parse
+  -- blocked matrix `LU` representing an LU-decomposition of `a`. Similar to
+  -- `lup a` but without pivoting.
   val lu [n] : mat [n] -> mat [n]
 
-  -- | `lower a` returns the strictly lower triangular part of `a` (i.e.,
-  -- excluding the diagonal elements in a). The result includes a 1 in all
-  -- diagonal elements.
+  -- | Extract lower-triangular matrix. The expression `lower a` returns the
+  -- strictly lower-triangular part of `a` (i.e., excluding the diagonal
+  -- elements in a). The result includes unit elements in the diagonal.
   val lower [n] : mat [n] -> mat [n]
 
-  -- | `upper a` returns the upper triangular part of `a`, including the
-  -- diagonal elements.
+  -- | Extract upper-triangular matrix. The expression `upper a` returns the
+  -- upper-triangular part of `a`, including the diagonal elements.
   val upper [n] : mat [n] -> mat [n]
+
+  -- | Forward solving. The expression `forsolve L b` solves (`Lx = b`, `x`),
+  -- where `x` and `b` are vectors and `L` is a lower-triangular matrix. Reads
+  -- only lower part of `L`, excluding the diagonal, and assumes implicit unit
+  -- diagonal elements.
+  val forsolve [n] : mat [n] -> [n]t -> [n]t
+
+  -- | Backward solving. The expression `backsolve U y` solves (`Ux = y`, `x`),
+  -- where `x` and `y` are vectors and `U` is an upper-triangular square matrix.
+  -- Reads only upper part of `U`, including the diagonal.
+  val backsolve [n] : mat [n] -> [n]t -> [n]t
+
+  -- | Solve a sparse linear system using sparse LU-decomposition with partial
+  -- block-limited (row) pivoting.
+  val ols [n] : mat [n] -> [n]t -> [n]t
+
+  -- | Convert to coordinate vectors. Given a sparse matrix, convert it to
+  -- coordinate vectors. Zero-elements within blocks are removed. Non-zero
+  -- elements are returned in row-major order.
+  val coo [n] : mat [n] -> ?[nnz].[nnz](i64,i64,t)
+
+  -- | Convert from coordinate vectors. The argument `n` must be a multiple of
+  -- `bsz`.
+  val from_coo [nnz] : (n:i64) -> [nnz](i64,i64,t) -> mat [n]
+
 }
 
 -- | Parameterised module for creating blocked square regular matrices. The
@@ -141,15 +170,11 @@ module blocked_square_regular (T: ordered_field) (X: {val bsz : i64})
   def matmul = linalg.matmul
 
   module lup_mod = mk_lup (T)
-  type perm [n] = lup_mod.perm [n]
-  let permute = lup_mod.permute
-  let permute_inv = lup_mod.permute_inv
-  let permute_add = lup_mod.permute_add
-  let permute_emp = lup_mod.permute_emp
 
   -- Assertion error messages
   def ERROR_block_size_must_divide_n x = x
   def ERROR_diagonal_block_must_be_nonempty x = x
+  def ERROR_backsolve_diagonal_element_is_zero x = x
 
   type~ mat [n] =
     ?[nz].{ n: [n]()              -- nz is the number of non-zero blocks
@@ -386,7 +411,7 @@ module blocked_square_regular (T: ordered_field) (X: {val bsz : i64})
   -- | X21  X  |
   --
 
-  def lup_nofill [n] (a: mat [n]) : (mat [n], perm [n]) =
+  def lup_nofill [n] (a: mat [n]) : (mat [n], perm.t [n]) =
     let nb = n / bsz  -- number of blocks in each dimension
     let hrcbs =
       map3 (\h i b ->
@@ -396,20 +421,20 @@ module blocked_square_regular (T: ordered_field) (X: {val bsz : i64})
            a.idxs
            a.blks
     let (hrcbs, p) =
-      loop (hrcbs,p0) = (hrcbs,lup_mod.permute_emp) for i < nb
+      loop (hrcbs,p0) = (hrcbs,perm.id 0) for i < nb
       do
-         let p0 : perm[i*bsz] = p0 :> perm[i*bsz]
+         let p0 = p0 :> perm.t[i*bsz]
          let blks = filter (\(_, r, c, _) -> r >= i && c >= i) hrcbs
 	 let (h, r, c, b) = blks[0] -- h is the idx into hrcbs identifying the current diagonal block
-  	 let (b,p:perm[bsz]) = assert (ERROR_diagonal_block_must_be_nonempty(r == i && c == i))
-				      (lup_mod.lup (copy b))
+  	 let (b,p:perm.t[bsz]) = assert (ERROR_diagonal_block_must_be_nonempty(r == i && c == i))
+					(lup_mod.lup (copy b))
          let A21 = filter (\(_, r, c, _) -> r > i && c == i) blks
          let A12 = filter (\(_, r, c, _) -> c > i && r == i) blks
          let X21 = map (\(h, r, _, a) ->
 			  (h, r, map (backsolve' b) a)
 		       ) A21
          let X12 = map (\(h, _, c, a) ->
-			  (h, c, transpose (map (\a -> lup_mod.forsolve b (permute_inv p (copy a))) (transpose a)))
+			  (h, c, transpose (map (\a -> lup_mod.forsolve b (perm.permute (perm.inv p) (copy a))) (transpose a)))
 		       ) A12
          let hrcbs[h] = (h, r, c, b)
          let hrcbs = scatter hrcbs (map (.0) X21) (map (\(h, r, b) -> (h, r, c, b)) X21)
@@ -430,14 +455,14 @@ module blocked_square_regular (T: ordered_field) (X: {val bsz : i64})
          let hrcbs = scatter hrcbs (map (.0) D'') D''
 	 -- permute lower blocks of block row i
 	 let bs = filter (\(_,r,c,_) -> r == i && c < i) hrcbs
-	 let hrcbs = scatter hrcbs (map (.0) bs) (map (\(h,r,c,b) -> (h,r,c,lup_mod.permute p (copy b))) bs)
-         in (hrcbs, lup_mod.permute_add p0 p)
+	 let hrcbs = scatter hrcbs (map (.0) bs) (map (\(h,r,c,b) -> (h,r,c,perm.permute p (copy b))) bs)
+         in (hrcbs, perm.add p0 p)
     in ({ n = a.n
 	, idxs = a.idxs
 	, blks = map (.3) hrcbs
-        }, p :> perm[n])
+        }, p :> perm.t[n])
 
-  def lup [n] (a:mat [n]) : (mat[n], perm[n]) =
+  def lup [n] (a:mat [n]) : (mat[n], perm.t[n]) =
     let fills = lu_find_fills a
     let x = mk n (map (\(r,c) -> (r,c,tabulate_2d bsz bsz (\_ _ -> T.i64 0))) fills)
     in lup_nofill (add a x)
@@ -523,5 +548,91 @@ module blocked_square_regular (T: ordered_field) (X: {val bsz : i64})
     let fills = lu_find_fills a
     let x = mk n (map (\(r,c) -> (r,c,tabulate_2d bsz bsz (\_ _ -> T.i64 0))) fills)
     in lu_nofill (add a x)
+
+  -- Solve (Lx = b, x), where x and b are vectors and L is a lower-triangular
+  -- matrix. Reads only lower part of L, excluding the diagonal, and assumes
+  -- implicit unit diagonal elements.
+  def forsolve [n] (L:mat[n]) (b:[n]t) : [n]t =
+    let y : *[n]t = replicate n (T.i64 0)
+    let nb = n / bsz
+    let blks = map2 (\h b ->
+		       let (r,c) = idx_unflatten nb h
+		       in (h, r, c, b)) L.idxs L.blks
+    in loop y for k < nb
+       do let bs = filter (\(_,r,c,_) -> r == k && c <= r) blks
+	  in loop y for j < bsz do
+	     let i = k * bsz + j
+	     let sums = map (\(_,r,c,b) ->
+			       let bound = if c == r then j else bsz
+			       let bslice = b[j,:bound]
+			       let yslice = y[k*bsz:k*bsz+bound] :> [bound]t
+			       in dotprod bslice yslice) bs   --  dotprod L[i,:i] y[:i]
+	     let sum = reduce (T.+) (T.i64 0) sums
+	     let y[i] = copy(b[i] T.- sum)
+	     in y
+
+  -- Solve (Ux = y, x), where x and y are vectors and U is an upper-triangular
+  -- square matrix.  Reads only upper part of U, including the diagonal.
+  def backsolve [n] (U:mat[n]) (y:[n]t) : [n]t =
+    let x : *[n]t = replicate n (T.i64 0)
+    let nb = n / bsz
+    let blks = map2 (\h b ->
+		       let (r,c) = idx_unflatten nb h
+		       in (h, r, c, b)) U.idxs U.blks
+    in loop x for k in (iota nb)[::-1]
+       do let bs = filter (\(_,r,c,_) -> r == k && c >= r) blks
+	  let diagblk =
+	    let diag = filter (\(_,r,c,_) -> r == c) bs
+	    in assert (length diag == 1) (diag[0].3)
+	  in loop x for j in (iota bsz)[::-1] do
+	     let i = k * bsz + j
+	     let sums = map (\(_,r,c,b) ->
+			       let bound = if c == r then j+1 else 0
+			       let bslice = b[j,bound:]
+			       let xslice = x[k*bsz+bound:(k+1)*bsz] :> [bsz-bound]t
+			       in dotprod bslice xslice) bs   -- dotprod U[i,i+1:] x[i+1:]
+	     let sum = reduce (T.+) zero_t sums
+	     let ejj = diagblk[j][j]
+	     let x[i] = assert (ERROR_backsolve_diagonal_element_is_zero(ejj T.!= zero_t))
+			       (copy(y[i] T.- sum) T./ ejj)
+	     in x
+
+  def ols [n] (a: mat [n]) (b:[n]t) : [n]t =
+    let (LU,p) = lup a
+    in backsolve LU (forsolve LU (perm.permute p (copy b)))
+
+  def coo [n] (a: mat [n]) : ?[nnz].[nnz](i64,i64,t) =
+    let nb = n / bsz
+    in map2 (\h b ->
+	       let (r,c) = idx_unflatten nb h
+	       in map2 (\i row ->
+			  map2 (\j v -> (r*bsz+i,c*bsz+j,v)) (iota bsz) row
+		       ) (iota bsz) b
+	    ) a.idxs a.blks
+       |> flatten |> flatten
+       |> filter (\(_,_,v) -> v T.!= zero_t)
+
+  def from_coo [nnz] (n:i64) (xs:[nnz](i64,i64,t)) : mat [n] =
+    let nb = assert (ERROR_block_size_must_divide_n(n % bsz == 0))
+		    (n / bsz)
+    let bs = map (\(i,j,b) ->
+		    let h = assert (0 <= i && i < n && 0 <= j && j < n)
+				   (idx_flatten nb (i/bsz,j/bsz))
+		    in (h, i%bsz, j%bsz, b)
+		 ) xs
+    let bs = radix_sort_by_key (.0) i64.num_bits i64.get_bit bs
+    let fs = map (\i -> if i == 0 || bs[i].0 != bs[i-1].0 then 1
+			else 0) (indices bs)
+    let bis = scan (+) 0 fs |> map (\bi -> bi-1)  -- block indices
+    let idxs = map2 (\(h,_,_,_) f -> (h,f)) bs fs
+	       |> filter (\(_,f) -> f > 0)
+	       |> map (.0)
+    let blks = map (\ _ -> tabulate_2d bsz bsz (\ _ _ -> zero_t)) idxs
+    let is = map2 (\bi (_,s,t,_) -> (bi,s,t)) bis bs
+    let vs = map (.3) bs
+    in { n = replicate n ()
+       , idxs = idxs
+       , blks = scatter_3d blks is vs
+       }
 
 }
