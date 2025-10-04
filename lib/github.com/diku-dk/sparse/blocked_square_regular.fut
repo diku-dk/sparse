@@ -434,7 +434,8 @@ module blocked_square_regular (T: ordered_field) (X: {val bsz : i64})
 			  (h, r, map (backsolve' b) a)
 		       ) A21
          let X12 = map (\(h, _, c, a) ->
-			  (h, c, transpose (map (\a -> lup_mod.forsolve b (perm.permute (perm.inv p) (copy a))) (transpose a)))
+			  let a = perm.permute p a
+			  in (h, c, transpose (map (lup_mod.forsolve b) (transpose a)))
 		       ) A12
          let hrcbs[h] = (h, r, c, b)
          let hrcbs = scatter hrcbs (map (.0) X21) (map (\(h, r, b) -> (h, r, c, b)) X21)
@@ -453,7 +454,7 @@ module blocked_square_regular (T: ordered_field) (X: {val bsz : i64})
            setops.join_by_key (.1) (.0) D D' -- ignore fillins
 	   |> map (\((h, _, r, c, b), (_, _, _, b')) -> (h, r, c, matsub b b'))
          let hrcbs = scatter hrcbs (map (.0) D'') D''
-	 -- permute lower blocks of block row i
+	 -- permute blocks to the left of the diagonal in block row i
 	 let bs = filter (\(_,r,c,_) -> r == i && c < i) hrcbs
 	 let hrcbs = scatter hrcbs (map (.0) bs) (map (\(h,r,c,b) -> (h,r,c,perm.permute p (copy b))) bs)
          in (hrcbs, perm.add p0 p)
