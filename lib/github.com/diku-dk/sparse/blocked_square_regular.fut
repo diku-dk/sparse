@@ -148,6 +148,9 @@ module type blocked_square_regular = {
   -- `bsz`.
   val from_coo [nnz] : (n:i64) -> [nnz](i64,i64,t) -> mat [n]
 
+  -- | Return the block-pattern as a boolean matrix
+  val block_pattern [n] : mat [n] -> [n/bsz][n/bsz]bool
+
 }
 
 -- | Parameterised module for creating blocked square regular matrices. The
@@ -635,5 +638,11 @@ module blocked_square_regular (T: ordered_field) (X: {val bsz : i64})
        , idxs = idxs
        , blks = scatter_3d blks is vs
        }
+
+  def block_pattern [n] (m:mat [n]) : [n/bsz][n/bsz]bool =
+    let [nzb] idxs : [nzb]i64 = m.idxs
+    let b = tabulate_2d (n/bsz) (n/bsz) (\_ _ -> false)
+    let is = map (idx_unflatten (n/bsz)) idxs
+    in scatter_2d b is (rep true)
 
 }

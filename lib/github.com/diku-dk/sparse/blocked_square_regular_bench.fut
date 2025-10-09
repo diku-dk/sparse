@@ -27,6 +27,15 @@ def pentaband (n:i64) : []coo =
   in band (f 0) n 0 ++ band (f 1) n 1 ++ band (g 0) n (-1)
 	  ++ band (f 2) n 2 ++ band (f 3) n (-2)
 
+def rnd (n:i64) (r:f64) : []coo =
+  let k = i64.f64 (r * f64.i64(n*n))
+  let rnd i = i64.f64(f64.i64 n * (f64.sin(f64.i64 i) + 1) / 2)
+  let f s i j : f64 = 100 * f64.sin (f64.i64(n*i+j+1+s))
+  let pts = map (\i -> let (x,y) = (rnd i, rnd (2*i+3))
+		       in (x,y,f 1 x y)
+		) (iota k)
+  in triband n ++ pts
+
 def ok (x:f64) : bool =
   !(f64.isnan x || f64.isinf x)
 
@@ -76,75 +85,195 @@ entry main_dense_pentaband (n:i64) : bool =
 entry main_blkdense_pentaband (n:i64) : bool =
   run_blkdense (pentaband n |> coo2dense n)
 
+entry main_sparse_rnd01 (n:i64) : bool =
+  run_sparse (rnd n 0.01 |> from_coo n)
+
+entry main_dense_rnd01 (n:i64) : bool =
+  run_dense (rnd n 0.01 |> coo2dense n)
+
+entry main_blkdense_rnd01 (n:i64) : bool =
+  run_blkdense (rnd n 0.01 |> coo2dense n)
+
+entry main_sparse_rnd05 (n:i64) : bool =
+  run_sparse (rnd n 0.05 |> from_coo n)
+
+entry main_dense_rnd05 (n:i64) : bool =
+  run_dense (rnd n 0.05 |> coo2dense n)
+
+entry main_blkdense_rnd05 (n:i64) : bool =
+  run_blkdense (rnd n 0.05 |> coo2dense n)
+
+entry main_sparse_rnd10 (n:i64) : bool =
+  run_sparse (rnd n 0.1 |> from_coo n)
+
+entry main_dense_rnd10 (n:i64) : bool =
+  run_dense (rnd n 0.1 |> coo2dense n)
+
+entry main_blkdense_rnd10 (n:i64) : bool =
+  run_blkdense (rnd n 0.1 |> coo2dense n)
+
+-- ==
+-- entry: main_sparse_rnd01
+-- input { 64i64 } output { true }
+-- notest input { 128i64 } output { true }
+-- notest input { 256i64 } output { true }
+-- notest input { 512i64 } output { true }
+-- notest input { 1024i64 } output { true }
+-- notest input { 2048i64 } output { true }
+-- notest input { 2944i64 } output { true }
+-- notest input { 4096i64 } output { true }
+
+-- ==
+-- entry: main_dense_rnd01
+-- input { 64i64 } output { true }
+-- notest input { 128i64 } output { true }
+-- notest input { 256i64 } output { true }
+-- notest input { 512i64 } output { true }
+-- notest input { 1024i64 } output { true }
+-- notest input { 2048i64 } output { true }
+
+-- ==
+-- entry: main_blkdense_rnd01
+-- input { 64i64 } output { true }
+-- notest input { 128i64 } output { true }
+-- notest input { 256i64 } output { true }
+-- notest input { 512i64 } output { true }
+-- notest input { 1024i64 } output { true }
+-- notest input { 2048i64 } output { true }
+-- notest input { 2944i64 } output { true }
+-- notest input { 4096i64 } output { true }
+
+-- ==
+-- entry: main_sparse_rnd05
+-- input { 64i64 } output { true }
+-- notest input { 128i64 } output { true }
+-- notest input { 256i64 } output { true }
+-- notest input { 512i64 } output { true }
+-- notest input { 1024i64 } output { true }
+-- notest input { 2048i64 } output { true }
+-- notest input { 2944i64 } output { true }
+-- notest input { 4096i64 } output { true }
+
+-- ==
+-- entry: main_dense_rnd05
+-- input { 64i64 } output { true }
+-- notest input { 128i64 } output { true }
+-- notest input { 256i64 } output { true }
+-- notest input { 512i64 } output { true }
+-- notest input { 1024i64 } output { true }
+-- notest input { 2048i64 } output { true }
+
+-- ==
+-- entry: main_blkdense_rnd05
+-- input { 64i64 } output { true }
+-- notest input { 128i64 } output { true }
+-- notest input { 256i64 } output { true }
+-- notest input { 512i64 } output { true }
+-- notest input { 1024i64 } output { true }
+-- notest input { 2048i64 } output { true }
+-- notest input { 2944i64 } output { true }
+-- notest input { 4096i64 } output { true }
+
+
+-- ==
+-- entry: main_sparse_rnd10
+-- notest input { 64i64 } output { true }
+-- notest input { 128i64 } output { true }
+-- notest input { 256i64 } output { true }
+-- notest input { 512i64 } output { true }
+-- notest input { 1024i64 } output { true }
+-- notest input { 2048i64 } output { true }
+-- notest input { 2944i64 } output { true }
+-- notest input { 4096i64 } output { true }
+
+-- ==
+-- entry: main_dense_rnd10
+-- notest input { 64i64 } output { true }
+-- notest input { 128i64 } output { true }
+-- notest input { 256i64 } output { true }
+-- notest input { 512i64 } output { true }
+-- notest input { 1024i64 } output { true }
+-- notest input { 2048i64 } output { true }
+
+-- ==
+-- entry: main_blkdense_rnd10
+-- notest input { 64i64 } output { true }
+-- notest input { 128i64 } output { true }
+-- notest input { 256i64 } output { true }
+-- notest input { 512i64 } output { true }
+-- notest input { 1024i64 } output { true }
+-- notest input { 2048i64 } output { true }
+-- notest input { 2944i64 } output { true }
+-- notest input { 4096i64 } output { true }
 
 -- ==
 -- entry: main_sparse_pentaband
--- input { 64i64 } output { true }
--- input { 128i64 } output { true }
--- input { 256i64 } output { true }
--- input { 512i64 } output { true }
--- input { 1024i64 } output { true }
--- input { 2048i64 } output { true }
--- input { 2944i64 } output { true }
--- input { 4096i64 } output { true }
--- input { 5952i64 } output { true }
--- input { 8192i64 } output { true }
+-- notest input { 64i64 } output { true }
+-- notest input { 128i64 } output { true }
+-- notest input { 256i64 } output { true }
+-- notest input { 512i64 } output { true }
+-- notest input { 1024i64 } output { true }
+-- notest input { 2048i64 } output { true }
+-- notest input { 2944i64 } output { true }
+-- notest input { 4096i64 } output { true }
+-- notest input { 5952i64 } output { true }
+-- notest input { 8192i64 } output { true }
 
 -- ==
 -- entry: main_dense_pentaband
--- input { 64i64 } output { true }
--- input { 128i64 } output { true }
--- input { 256i64 } output { true }
--- input { 512i64 } output { true }
--- input { 1024i64 } output { true }
--- input { 2048i64 } output { true }
--- input { 2944i64 } output { true }
+-- notest input { 64i64 } output { true }
+-- notest input { 128i64 } output { true }
+-- notest input { 256i64 } output { true }
+-- notest input { 512i64 } output { true }
+-- notest input { 1024i64 } output { true }
+-- notest input { 2048i64 } output { true }
+-- notest input { 2944i64 } output { true }
 
 -- ==
 -- entry: main_blkdense_pentaband
--- input { 64i64 } output { true }
--- input { 128i64 } output { true }
--- input { 256i64 } output { true }
--- input { 512i64 } output { true }
--- input { 1024i64 } output { true }
--- input { 2048i64 } output { true }
--- input { 2944i64 } output { true }
--- input { 4096i64 } output { true }
--- input { 5952i64 } output { true }
--- input { 8192i64 } output { true }
+-- notest input { 64i64 } output { true }
+-- notest input { 128i64 } output { true }
+-- notest input { 256i64 } output { true }
+-- notest input { 512i64 } output { true }
+-- notest input { 1024i64 } output { true }
+-- notest input { 2048i64 } output { true }
+-- notest input { 2944i64 } output { true }
+-- notest input { 4096i64 } output { true }
+-- notest input { 5952i64 } output { true }
+-- notest input { 8192i64 } output { true }
 
 -- ==
 -- entry: main_sparse_triband
--- input { 64i64 } output { true }
--- input { 128i64 } output { true }
--- input { 256i64 } output { true }
--- input { 512i64 } output { true }
--- input { 1024i64 } output { true }
--- input { 2048i64 } output { true }
--- input { 2944i64 } output { true }
--- input { 4096i64 } output { true }
--- input { 5952i64 } output { true }
--- input { 8192i64 } output { true }
+-- notest input { 64i64 } output { true }
+-- notest input { 128i64 } output { true }
+-- notest input { 256i64 } output { true }
+-- notest input { 512i64 } output { true }
+-- notest input { 1024i64 } output { true }
+-- notest input { 2048i64 } output { true }
+-- notest input { 2944i64 } output { true }
+-- notest input { 4096i64 } output { true }
+-- notest input { 5952i64 } output { true }
+-- notest input { 8192i64 } output { true }
 
 -- ==
 -- entry: main_dense_triband
--- input { 64i64 } output { true }
--- input { 128i64 } output { true }
--- input { 256i64 } output { true }
--- input { 512i64 } output { true }
--- input { 1024i64 } output { true }
--- input { 2048i64 } output { true }
--- input { 2944i64 } output { true }
+-- notest input { 64i64 } output { true }
+-- notest input { 128i64 } output { true }
+-- notest input { 256i64 } output { true }
+-- notest input { 512i64 } output { true }
+-- notest input { 1024i64 } output { true }
+-- notest input { 2048i64 } output { true }
+-- notest input { 2944i64 } output { true }
 
 -- ==
 -- entry: main_blkdense_triband
--- input { 64i64 } output { true }
--- input { 128i64 } output { true }
--- input { 256i64 } output { true }
--- input { 512i64 } output { true }
--- input { 1024i64 } output { true }
--- input { 2048i64 } output { true }
--- input { 2944i64 } output { true }
--- input { 4096i64 } output { true }
--- input { 5952i64 } output { true }
--- input { 8192i64 } output { true }
+-- notest input { 64i64 } output { true }
+-- notest input { 128i64 } output { true }
+-- notest input { 256i64 } output { true }
+-- notest input { 512i64 } output { true }
+-- notest input { 1024i64 } output { true }
+-- notest input { 2048i64 } output { true }
+-- notest input { 2944i64 } output { true }
+-- notest input { 4096i64 } output { true }
+-- notest input { 5952i64 } output { true }
+-- notest input { 8192i64 } output { true }
